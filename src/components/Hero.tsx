@@ -1,7 +1,8 @@
+import Link from "next/link";
+
 export default function Hero() {
   return (
     <section className="relative h-screen w-full overflow-hidden">
-
       {/* Background Image */}
       <div
         className="absolute inset-0 bg-cover bg-center"
@@ -16,7 +17,6 @@ export default function Hero() {
 
       {/* Content */}
       <div className="relative z-10 flex items-center h-full px-16">
-
         {/* Left Text Section */}
         <div className="max-w-xl">
           <h1 className="text-6xl font-serif text-gray-700 leading-tight">
@@ -26,13 +26,15 @@ export default function Hero() {
           </h1>
 
           <p className="mt-6 font-serif text-gray-600">
-            Connect with specialized medical professionals across the city.
-            Book appointments seamlessly through our digital platform.
+            Connect with specialized medical professionals across the city. Book
+            appointments seamlessly through our digital platform.
           </p>
 
-          <button className="mt-8 px-6 py-3 font-serif bg-gray-800 text-white rounded-full shadow-lg">
-            FIND YOUR DOCTOR
-          </button>
+          <Link href="/Doctors">
+            <button className="mt-8 px-6 py-3 font-serif bg-gray-800 text-white rounded-full shadow-lg">
+              FIND YOUR DOCTOR
+            </button>
+          </Link>
         </div>
 
         {/* Right Glass Card */}
