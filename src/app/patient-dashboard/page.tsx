@@ -12,6 +12,10 @@ import { useRouter } from "next/navigation";
 import { UserRound, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { launchRazorpayCheckout } from "@/lib/razorpayClient";
+import {
+  generateSpecialAppointmentTimes,
+  type ScheduleEntry,
+} from "@/lib/doctorSchedule";
 
 type User = {
   id: string;
@@ -50,6 +54,8 @@ type Slot = {
 
 type Booking = {
   id: string;
+  doctor_id: string;
+  hospital_id: string;
   appointment_date: string;
   appointment_time: string;
   reason: string;
@@ -66,6 +72,18 @@ type Booking = {
     receiptId?: string;
     amount?: number;
     currency?: string;
+    notifications?: {
+      confirmationSid?: string;
+      confirmationStatus?: string;
+      lastAttemptAt?: string;
+      error?: string | null;
+      reminders?: Array<{
+        sid: string;
+        sendAt: string;
+        label: string;
+        status?: string;
+      }>;
+    };
   };
 };
 
@@ -84,14 +102,25 @@ export default function PatientDashboard() {
   const [mounted, setMounted] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showSlotModal, setShowSlotModal] = useState(false);
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [bookingSlot, setBookingSlot] = useState<string | null>(null);
+  const [savingBookingEdit, setSavingBookingEdit] = useState(false);
+  const [retryingNotification, setRetryingNotification] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [availableSlots, setAvailableSlots] = useState<Slot[]>([]);
+  const [editAvailableSlots, setEditAvailableSlots] = useState<Slot[]>([]);
+  const [editAvailableTimes, setEditAvailableTimes] = useState<string[]>([]);
   const [slotSelection, setSlotSelection] = useState(emptySlotSelection);
+  const [editBookingForm, setEditBookingForm] = useState({
+    reason: "",
+    slotId: "",
+    appointmentDate: "",
+    appointmentTime: "",
+  });
   const [profileForm, setProfileForm] = useState({
     first_name: "",
     last_name: "",
@@ -118,7 +147,9 @@ export default function PatientDashboard() {
     setProfileForm({
       first_name: parsedUser.first_name || parsedUser.name?.split(" ")[0] || "",
       last_name:
-        parsedUser.last_name || parsedUser.name?.split(" ").slice(1).join(" ") || "",
+        parsedUser.last_name ||
+        parsedUser.name?.split(" ").slice(1).join(" ") ||
+        "",
       email: parsedUser.email || "",
       phone: parsedUser.phone || "",
       gender: parsedUser.gender || "",
@@ -144,6 +175,49 @@ export default function PatientDashboard() {
     void loadAvailableSlots(slotSelection.doctorId);
   }, [slotSelection.doctorId]);
 
+  useEffect(() => {
+    if (
+      !editingBooking ||
+      editingBooking.meta.kind !== "special" ||
+      !editBookingForm.appointmentDate
+    ) {
+      return;
+    }
+
+    void (async () => {
+      const [scheduleRes, bookingsRes] = await Promise.all([
+        fetch(`/api/schedules?doctor_id=${editingBooking.doctor_id}`),
+        fetch(`/api/bookings?doctor_id=${editingBooking.doctor_id}`),
+      ]);
+
+      const [scheduleData, bookingsData] = await Promise.all([
+        scheduleRes.json(),
+        bookingsRes.json(),
+      ]);
+
+      const activeBookings = Array.isArray(bookingsData)
+        ? (bookingsData as Booking[]).filter(
+            (item) =>
+              item.id !== editingBooking.id &&
+              item.meta.status !== "completed" &&
+              item.appointment_date === editBookingForm.appointmentDate,
+          )
+        : [];
+
+      const blockedTimes = activeBookings.map((item) =>
+        item.appointment_time.slice(0, 5),
+      );
+
+      setEditAvailableTimes(
+        generateSpecialAppointmentTimes(
+          (Array.isArray(scheduleData) ? scheduleData : []) as ScheduleEntry[],
+          editBookingForm.appointmentDate,
+          blockedTimes,
+        ),
+      );
+    })();
+  }, [editingBooking, editBookingForm.appointmentDate]);
+
   const displayName =
     [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() ||
     user?.name ||
@@ -164,9 +238,13 @@ export default function PatientDashboard() {
 
   const specializations = useMemo(() => {
     const relevantDoctors = doctors.filter((doctor) =>
-      slotSelection.hospitalId ? doctor.hospital_id === slotSelection.hospitalId : true
+      slotSelection.hospitalId
+        ? doctor.hospital_id === slotSelection.hospitalId
+        : true,
     );
-    return [...new Set(relevantDoctors.map((doctor) => doctor.specialization))].sort();
+    return [
+      ...new Set(relevantDoctors.map((doctor) => doctor.specialization)),
+    ].sort();
   }, [doctors, slotSelection.hospitalId]);
 
   const handleLogout = () => {
@@ -208,7 +286,9 @@ export default function PatientDashboard() {
     ]);
 
     const activeBookings = Array.isArray(bookingsData)
-      ? (bookingsData as Booking[]).filter((booking) => booking.meta.status !== "completed")
+      ? (bookingsData as Booking[]).filter(
+          (booking) => booking.meta.status !== "completed",
+        )
       : [];
 
     const nextSlots = Array.isArray(slotsData)
@@ -237,7 +317,7 @@ export default function PatientDashboard() {
   };
 
   const handleProfileChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setProfileForm((prev) => ({ ...prev, [name]: value }));
@@ -324,7 +404,9 @@ export default function PatientDashboard() {
     try {
       await handlePayForBooking(data.id);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Payment was not completed.");
+      alert(
+        error instanceof Error ? error.message : "Payment was not completed.",
+      );
     }
   };
 
@@ -340,6 +422,185 @@ export default function PatientDashboard() {
         await loadPatientBookings(user.id);
       },
     });
+  };
+
+  const openEditBooking = async (booking: Booking) => {
+    setEditingBooking(booking);
+    setEditBookingForm({
+      reason: booking.reason || "",
+      slotId: booking.meta.slotId || "",
+      appointmentDate: booking.appointment_date,
+      appointmentTime: booking.appointment_time.slice(0, 5),
+    });
+
+    if (booking.meta.kind === "daily") {
+      const [slotsRes, bookingsRes] = await Promise.all([
+        fetch(`/api/slots?doctor_id=${booking.doctor_id}`),
+        fetch(`/api/bookings?doctor_id=${booking.doctor_id}`),
+      ]);
+
+      const [slotsData, bookingsData] = await Promise.all([
+        slotsRes.json(),
+        bookingsRes.json(),
+      ]);
+
+      const activeBookings = Array.isArray(bookingsData)
+        ? (bookingsData as Booking[]).filter(
+            (item) =>
+              item.id !== booking.id && item.meta.status !== "completed",
+          )
+        : [];
+
+      const nextSlots = Array.isArray(slotsData)
+        ? (slotsData as Slot[]).filter((slot) => {
+            const slotDate = new Date(slot.date);
+            const slotDateText = slotDate.toISOString().slice(0, 10);
+            const slotTimeText = slotDate.toTimeString().slice(0, 5);
+
+            const alreadyBooked = activeBookings.some((item) => {
+              if (item.meta.slotId) {
+                return item.meta.slotId === slot.id;
+              }
+
+              return (
+                item.appointment_date === slotDateText &&
+                item.appointment_time.slice(0, 5) === slotTimeText
+              );
+            });
+
+            return (
+              (!alreadyBooked || slot.id === booking.meta.slotId) &&
+              slotDate.getTime() >= Date.now()
+            );
+          })
+        : [];
+
+      setEditAvailableSlots(nextSlots);
+      setEditAvailableTimes([]);
+      return;
+    }
+
+    const [scheduleRes, bookingsRes] = await Promise.all([
+      fetch(`/api/schedules?doctor_id=${booking.doctor_id}`),
+      fetch(`/api/bookings?doctor_id=${booking.doctor_id}`),
+    ]);
+
+    const [scheduleData, bookingsData] = await Promise.all([
+      scheduleRes.json(),
+      bookingsRes.json(),
+    ]);
+
+    const activeBookings = Array.isArray(bookingsData)
+      ? (bookingsData as Booking[]).filter(
+          (item) =>
+            item.id !== booking.id &&
+            item.meta.status !== "completed" &&
+            item.appointment_date === booking.appointment_date,
+        )
+      : [];
+
+    const blockedTimes = activeBookings.map((item) =>
+      item.appointment_time.slice(0, 5),
+    );
+
+    setEditAvailableTimes(
+      generateSpecialAppointmentTimes(
+        (Array.isArray(scheduleData) ? scheduleData : []) as ScheduleEntry[],
+        booking.appointment_date,
+        blockedTimes,
+      ),
+    );
+    setEditAvailableSlots([]);
+  };
+
+  const handleSaveBookingEdit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!editingBooking || !user) {
+      return;
+    }
+
+    setSavingBookingEdit(true);
+
+    let payload: Record<string, unknown> = {
+      id: editingBooking.id,
+      reason: editBookingForm.reason,
+    };
+
+    if (editingBooking.meta.kind === "daily") {
+      const selectedSlot = editAvailableSlots.find(
+        (slot) => slot.id === editBookingForm.slotId,
+      );
+
+      if (!selectedSlot) {
+        setSavingBookingEdit(false);
+        alert("Select a valid daily slot.");
+        return;
+      }
+
+      payload = {
+        ...payload,
+        appointment_date: new Date(selectedSlot.date).toISOString().slice(0, 10),
+        appointment_time: new Date(selectedSlot.date).toTimeString().slice(0, 5),
+        meta: {
+          slotId: selectedSlot.id,
+        },
+      };
+    } else {
+      payload = {
+        ...payload,
+        appointment_date: editBookingForm.appointmentDate,
+        appointment_time: editBookingForm.appointmentTime,
+      };
+    }
+
+    const res = await fetch("/api/bookings", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    setSavingBookingEdit(false);
+
+    if (!res.ok) {
+      alert(data.error || "Failed to update booking");
+      return;
+    }
+
+    setBookings((prev) =>
+      prev.map((booking) => (booking.id === data.id ? data : booking)),
+    );
+    setEditingBooking(null);
+    setEditAvailableSlots([]);
+    setEditAvailableTimes([]);
+  };
+
+  const handleRetryNotification = async (bookingId: string) => {
+    setRetryingNotification(bookingId);
+    const res = await fetch(`/api/bookings/${bookingId}/notify`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    setRetryingNotification(null);
+
+    if (!res.ok) {
+      alert(data.error || "Failed to send booking SMS.");
+      return;
+    }
+
+    if (user) {
+      await loadPatientBookings(user.id);
+    }
+
+    if (data.notificationError) {
+      alert(`Notification retry finished with an issue: ${data.notificationError}`);
+      return;
+    }
+
+    alert("Booking SMS notification sent or queued successfully.");
   };
 
   if (!mounted || !user) return null;
@@ -361,7 +622,7 @@ export default function PatientDashboard() {
             <span className="flex h-14 w-14 items-center justify-center rounded-full border border-gray-300 text-gray-700">
               <UserRound className="h-7 w-7" />
             </span>
-            <span className="max-w-[140px] truncate text-sm font-medium text-gray-700">
+            <span className="max-w-140px truncate text-sm font-medium text-gray-700">
               {displayName}
             </span>
           </button>
@@ -391,7 +652,10 @@ export default function PatientDashboard() {
                 </div>
               ) : (
                 bookings.map((booking) => (
-                  <div key={booking.id} className="rounded-lg border bg-white p-5">
+                  <div
+                    key={booking.id}
+                    className="rounded-lg border bg-white p-5"
+                  >
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
                         <h3 className="font-semibold text-gray-800">
@@ -401,7 +665,8 @@ export default function PatientDashboard() {
                           {booking.specialization} • {booking.hospital_name}
                         </p>
                         <p className="mt-2 text-sm text-gray-600">
-                          {booking.appointment_date} at {booking.appointment_time}
+                          {booking.appointment_date} at{" "}
+                          {booking.appointment_time}
                         </p>
                         {booking.reason ? (
                           <p className="mt-1 text-sm text-gray-600">
@@ -439,10 +704,19 @@ export default function PatientDashboard() {
                             : "Payment Pending"}
                         </span>
                         <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void openEditBooking(booking)}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700"
+                          >
+                            Edit
+                          </button>
                           {booking.meta.paymentStatus !== "paid" ? (
                             <button
                               type="button"
-                              onClick={() => void handlePayForBooking(booking.id)}
+                              onClick={() =>
+                                void handlePayForBooking(booking.id)
+                              }
                               className="rounded-lg bg-black px-4 py-2 text-xs font-medium text-white"
                             >
                               Pay Now
@@ -457,7 +731,22 @@ export default function PatientDashboard() {
                               Download Receipt
                             </a>
                           ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void handleRetryNotification(booking.id)}
+                            disabled={retryingNotification === booking.id}
+                            className="rounded-lg border border-blue-300 px-4 py-2 text-xs font-medium text-blue-700"
+                          >
+                            {retryingNotification === booking.id
+                              ? "Sending..."
+                              : "Send SMS"}
+                          </button>
                         </div>
+                        {booking.meta.notifications?.error ? (
+                          <p className="max-w-xs text-xs text-rose-600">
+                            SMS issue: {booking.meta.notifications.error}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -516,14 +805,29 @@ export default function PatientDashboard() {
             <div className="space-y-3 text-sm text-gray-700">
               <p>
                 Active Bookings:{" "}
-                <b>{bookings.filter((booking) => booking.meta.status !== "completed").length}</b>
+                <b>
+                  {
+                    bookings.filter(
+                      (booking) => booking.meta.status !== "completed",
+                    ).length
+                  }
+                </b>
               </p>
               <p>
                 Completed:{" "}
-                <b>{bookings.filter((booking) => booking.meta.status === "completed").length}</b>
+                <b>
+                  {
+                    bookings.filter(
+                      (booking) => booking.meta.status === "completed",
+                    ).length
+                  }
+                </b>
               </p>
               <p>
-                Doctors Consulted: <b>{new Set(bookings.map((booking) => booking.doctor_name)).size}</b>
+                Doctors Consulted:{" "}
+                <b>
+                  {new Set(bookings.map((booking) => booking.doctor_name)).size}
+                </b>
               </p>
             </div>
           </div>
@@ -734,7 +1038,10 @@ export default function PatientDashboard() {
               <select
                 value={slotSelection.doctorId}
                 onChange={(e) =>
-                  setSlotSelection((prev) => ({ ...prev, doctorId: e.target.value }))
+                  setSlotSelection((prev) => ({
+                    ...prev,
+                    doctorId: e.target.value,
+                  }))
                 }
                 className="rounded-2xl border border-gray-200 p-4"
               >
@@ -750,10 +1057,13 @@ export default function PatientDashboard() {
             <textarea
               value={slotSelection.reason}
               onChange={(e) =>
-                setSlotSelection((prev) => ({ ...prev, reason: e.target.value }))
+                setSlotSelection((prev) => ({
+                  ...prev,
+                  reason: e.target.value,
+                }))
               }
               placeholder="Reason for visit"
-              className="mt-4 min-h-[88px] w-full rounded-2xl border border-gray-200 p-4"
+              className="mt-4 min-h-88px w-full rounded-2xl border border-gray-200 p-4"
             />
 
             <div className="mt-6 space-y-4">
@@ -790,12 +1100,159 @@ export default function PatientDashboard() {
                       onClick={() => void handleBookDailySlot(slot)}
                       className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-[#161616] disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                      {bookingSlot === slot.id ? "Booking..." : "Book This Slot"}
+                      {bookingSlot === slot.id
+                        ? "Booking..."
+                        : "Book This Slot"}
                     </button>
                   </div>
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {editingBooking && (
+        <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/30 px-4 py-10 backdrop-blur-[2px]">
+          <div className="w-full max-w-3xl rounded-[28px] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.25)] sm:p-8">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-serif text-3xl font-semibold text-gray-900">
+                  Edit Booking
+                </h2>
+                <p className="mt-2 text-sm text-gray-500">
+                  Update your booking details and keep your dashboard record in sync.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingBooking(null);
+                  setEditAvailableSlots([]);
+                  setEditAvailableTimes([]);
+                }}
+                className="rounded-full border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100"
+                aria-label="Close booking editor"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBookingEdit} className="space-y-5">
+              <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-600">
+                <p>
+                  {editingBooking.doctor_name} • {editingBooking.hospital_name}
+                </p>
+                <p className="mt-1">
+                  Booking type:{" "}
+                  {editingBooking.meta.kind === "special"
+                    ? "Special Appointment"
+                    : "Daily Slot"}
+                </p>
+              </div>
+
+              {editingBooking.meta.kind === "daily" ? (
+                <ProfileField label="Choose Another Daily Slot">
+                  <select
+                    value={editBookingForm.slotId}
+                    onChange={(e) =>
+                      setEditBookingForm((prev) => ({
+                        ...prev,
+                        slotId: e.target.value,
+                      }))
+                    }
+                    className={profileInputClassName}
+                    required
+                  >
+                    <option value="">Select Slot</option>
+                    {editAvailableSlots.map((slot) => (
+                      <option key={slot.id} value={slot.id}>
+                        {new Date(slot.date).toLocaleDateString()} at{" "}
+                        {new Date(slot.date).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}{" "}
+                        • {slot.location}
+                      </option>
+                    ))}
+                  </select>
+                </ProfileField>
+              ) : (
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <ProfileField label="Appointment Date">
+                    <input
+                      type="date"
+                      value={editBookingForm.appointmentDate}
+                      onChange={(e) =>
+                        setEditBookingForm((prev) => ({
+                          ...prev,
+                          appointmentDate: e.target.value,
+                        }))
+                      }
+                      className={profileInputClassName}
+                      required
+                    />
+                  </ProfileField>
+
+                  <ProfileField label="Appointment Time">
+                    <select
+                      value={editBookingForm.appointmentTime}
+                      onChange={(e) =>
+                        setEditBookingForm((prev) => ({
+                          ...prev,
+                          appointmentTime: e.target.value,
+                        }))
+                      }
+                      className={profileInputClassName}
+                      required
+                    >
+                      <option value="">Select Time</option>
+                      {editAvailableTimes.map((time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ))}
+                    </select>
+                  </ProfileField>
+                </div>
+              )}
+
+              <ProfileField label="Reason">
+                <textarea
+                  value={editBookingForm.reason}
+                  onChange={(e) =>
+                    setEditBookingForm((prev) => ({
+                      ...prev,
+                      reason: e.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className={`${profileInputClassName} resize-none`}
+                />
+              </ProfileField>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingBooking(null);
+                    setEditAvailableSlots([]);
+                    setEditAvailableTimes([]);
+                  }}
+                  className="rounded-2xl border border-gray-300 px-6 py-3 text-sm font-medium text-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingBookingEdit}
+                  className="rounded-2xl bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-[#171717] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {savingBookingEdit ? "Saving..." : "Save Booking"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

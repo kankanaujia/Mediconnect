@@ -1,45 +1,18 @@
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { parseBookingReason, serializeBookingReason } from "@/lib/bookingMeta";
 import { sendNotificationsForBooking } from "@/lib/bookingNotifications";
 
-function getRazorpayConfig() {
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-  if (!keySecret) {
-    return null;
-  }
-
-  return { keySecret };
-}
-
-export async function POST(req: Request) {
-  const config = getRazorpayConfig();
-
-  if (!config) {
-    return NextResponse.json(
-      { error: "Configure RAZORPAY_KEY_SECRET." },
-      { status: 500 }
-    );
-  }
-
-  const {
-    bookingId,
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature,
-  } = (await req.json()) as {
-    bookingId: string;
-    razorpay_order_id: string;
-    razorpay_payment_id: string;
-    razorpay_signature: string;
-  };
+export async function POST(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
 
   const { data: booking, error } = await supabaseAdmin
     .from("bookings")
     .select("*")
-    .eq("id", bookingId)
+    .eq("id", id)
     .single();
 
   if (error || !booking) {
@@ -47,15 +20,6 @@ export async function POST(req: Request) {
   }
 
   const parsed = parseBookingReason(booking.reason);
-  const expected = crypto
-    .createHmac("sha256", config.keySecret)
-    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    .digest("hex");
-
-  if (expected !== razorpay_signature) {
-    return NextResponse.json({ error: "Payment verification failed" }, { status: 400 });
-  }
-
   const notificationResult = await sendNotificationsForBooking(booking);
 
   const { data: updated, error: updateError } = await supabaseAdmin
@@ -63,9 +27,6 @@ export async function POST(req: Request) {
     .update({
       reason: serializeBookingReason(parsed.reason, {
         ...parsed.meta,
-        paymentStatus: "paid",
-        paymentOrderId: razorpay_order_id,
-        paymentId: razorpay_payment_id,
         notifications: {
           confirmationSid: notificationResult.confirmation?.sid,
           confirmationStatus: notificationResult.confirmation ? "accepted" : "not-sent",
@@ -78,24 +39,22 @@ export async function POST(req: Request) {
         },
       }),
     })
-    .eq("id", bookingId)
+    .eq("id", id)
     .select("*")
     .single();
 
   if (updateError || !updated) {
     return NextResponse.json(
-      { error: updateError?.message || "Failed to update payment status" },
+      { error: updateError?.message || "Failed to update booking notifications" },
       { status: 500 }
     );
   }
 
   return NextResponse.json(
     {
-      bookingId,
-      paymentStatus: "paid",
-      receiptId: parsed.meta.receiptId,
-      patientLocation: notificationResult.patientLocation,
+      success: true,
       notificationError: notificationResult.error,
+      confirmationSid: notificationResult.confirmation?.sid,
     },
     { status: 200 }
   );

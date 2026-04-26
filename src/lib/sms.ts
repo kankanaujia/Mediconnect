@@ -4,6 +4,16 @@ type ReminderRecord = {
   label: string;
 };
 
+function normalizeAppointmentTime(time: string) {
+  const trimmed = time.trim();
+
+  if (/^\d{2}:\d{2}$/.test(trimmed)) {
+    return `${trimmed}:00`;
+  }
+
+  return trimmed;
+}
+
 function normalizePhone(phone: string) {
   const digits = phone.replace(/[^\d+]/g, "");
 
@@ -92,7 +102,9 @@ export async function scheduleBookingReminders(input: {
     return [] as ReminderRecord[];
   }
 
-  const appointment = new Date(`${input.appointmentDate}T${input.appointmentTime}:00`);
+  const appointment = new Date(
+    `${input.appointmentDate}T${normalizeAppointmentTime(input.appointmentTime)}`
+  );
   const candidates = [
     {
       label: "2-day reminder",

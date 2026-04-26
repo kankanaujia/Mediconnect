@@ -13,10 +13,14 @@ export type BookingMeta = {
   receiptId?: string;
   notifications?: {
     confirmationSid?: string;
+    confirmationStatus?: string;
+    lastAttemptAt?: string;
+    error?: string | null;
     reminders?: Array<{
       sid: string;
       sendAt: string;
       label: string;
+      status?: string;
     }>;
   };
 };

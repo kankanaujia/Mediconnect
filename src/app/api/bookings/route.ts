@@ -172,10 +172,20 @@ export async function POST(req: Request) {
 
 export async function PUT(req: Request) {
   const body = await req.json();
-  const { id, status, meta } = body as {
+  const {
+    id,
+    status,
+    meta,
+    reason,
+    appointment_date,
+    appointment_time,
+  } = body as {
     id: string;
     status?: BookingStatus;
     meta?: Record<string, unknown>;
+    reason?: string;
+    appointment_date?: string;
+    appointment_time?: string;
   };
 
   const { data: current, error: currentError } = await supabaseAdmin
@@ -190,10 +200,49 @@ export async function PUT(req: Request) {
 
   const parsed = parseBookingReason((current as BookingRow).reason);
 
+  const nextDate = appointment_date ?? current.appointment_date;
+  const nextTime = appointment_time ?? current.appointment_time;
+
+  if (
+    appointment_date ||
+    appointment_time ||
+    (meta && Object.prototype.hasOwnProperty.call(meta, "slotId"))
+  ) {
+    const { data: sameDoctorData } = await supabaseAdmin
+      .from("bookings")
+      .select("*")
+      .eq("doctor_id", current.doctor_id)
+      .eq("appointment_date", nextDate);
+
+    const conflict = ((sameDoctorData ?? []) as BookingRow[]).find((row) => {
+      if (row.id === id) {
+        return false;
+      }
+
+      const rowParsed = parseBookingReason(row.reason);
+      const sameTime = row.appointment_time === nextTime;
+      const nextSlotId =
+        (meta && typeof meta.slotId === "string" ? meta.slotId : parsed.meta.slotId) ??
+        undefined;
+      const sameSlot = nextSlotId && rowParsed.meta.slotId === nextSlotId;
+
+      return rowParsed.meta.status !== "completed" && (sameTime || sameSlot);
+    });
+
+    if (conflict) {
+      return NextResponse.json(
+        { error: "That new appointment slot is already taken." },
+        { status: 409 }
+      );
+    }
+  }
+
   const { data, error } = await supabaseAdmin
     .from("bookings")
     .update({
-      reason: serializeBookingReason(parsed.reason, {
+      appointment_date: nextDate,
+      appointment_time: nextTime,
+      reason: serializeBookingReason(reason ?? parsed.reason, {
         ...parsed.meta,
         ...meta,
         status: status ?? parsed.meta.status,
