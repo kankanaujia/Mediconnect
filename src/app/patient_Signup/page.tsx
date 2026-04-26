@@ -101,7 +101,7 @@ export default function PatientSignup() {
   return (
     <div className="min-h-screen bg-radial-gradient(circle_at_top,_rgba(255,255,255,0.85),_rgba(215,205,193,0.92)) px-4 py-28 sm:px-6 lg:px-10">
       <div className="mx-auto grid max-w-7xl gap-6 rounded-[28px] bg-[#f7f4f1] p-5 shadow-[0_30px_90px_rgba(15,23,42,0.16)] lg:grid-cols-[0.95fr_1.85fr] lg:p-8">
-        <aside className="relative overflow-hidden rounded-[22px] bg-[#050505] px-8 py-10 text-white sm:px-10 lg:min-h-880px lg:py-12">
+        <aside className="relative overflow-hidden rounded-[22px] bg-white px-8 py-10 text-white sm:px-10 lg:min-h-880px lg:py-12">
           <div className="flex h-full flex-col justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.35em] text-white/60">
