@@ -31,7 +31,7 @@ export default function Hero() {
           </p>
 
           <Link href="/Doctors">
-            <button className="mt-8 px-6 py-3 font-serif bg-gray-800 text-white rounded-full shadow-lg">
+            <button className="mt-8 px-6 py-3 font-serif bg-gray-800 text-white rounded-full shadow-lg cursor-pointer">
               FIND YOUR DOCTOR
             </button>
           </Link>

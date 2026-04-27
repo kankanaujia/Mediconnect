@@ -1,8 +1,9 @@
 "use client";
-
+import { useRouter } from "next/navigation";
 import { Phone, Mail, MapPin } from "lucide-react";
 
 export default function Footer() {
+  const router = useRouter();
   return (
     <footer className="relative bg-linear-to-b from-gray-900 to-gray-800 pt-20 px-10">
       
@@ -32,9 +33,25 @@ export default function Footer() {
             Quick Links
           </h3>
           <ul className="space-y-2 text-gray-300 text-sm font-serif">
+             <button
+              onClick={() => router.push("/")}
+              className="mt-1 border-b font-serif border-gray-800 pb- text-sm flex items-center hover:text-black transition cursor-pointer"
+            >
             <li className="hover:text-white cursor-pointer transition">Home</li>
-            <li className="hover:text-white cursor-pointer transition">Find Doctors</li>
+            </button>
+            <button
+              onClick={() => router.push("/Hospitals")}
+              className="mt-1 border-b font-serif border-gray-800 pb- text-sm flex items-center hover:text-black transition cursor-pointer"
+            >
             <li className="hover:text-white cursor-pointer transition">Hospitals</li>
+            </button>
+            <button
+              onClick={() => router.push("/Doctors")}
+              className="mt-1 border-b font-serif border-gray-800 pb- text-sm flex items-center hover:text-black transition cursor-pointer"
+            >
+            <li className="hover:text-white cursor-pointer transition">Find Doctors</li>
+            </button>
+            
           </ul>
         </div>
 
@@ -44,10 +61,21 @@ export default function Footer() {
             Services
           </h3>
           <ul className="space-y-2 text-gray-300 text-sm font-serif">
-            <li className="hover:text-white transition">Online Appointments</li>
-            <li className="hover:text-white transition">Specialist Consultations</li>
+            <button
+              onClick={() => router.push("/Patient_login")}
+              className="mt-1 border-b font-serif border-gray-800 text-sm flex items-center hover:text-black transition cursor-pointer"
+            >
+            <li className="hover:text-white cursor-pointer transition">Patient login</li>
+            </button>
+            <button
+              onClick={() => router.push("/Doctor_login")}
+              className="mt-1 border-b font-serif border-gray-800  text-sm flex items-center hover:text-black transition cursor-pointer"
+            >
+            <li className="hover:text-white cursor-pointer transition">Doctor login</li>
+            </button>
+            {/* <li className="hover:text-white transition">Specialist Consultations</li> 
             <li className="hover:text-white transition">Hospital Network</li>
-            <li className="hover:text-white transition">Medical Records</li>
+            <li className="hover:text-white transition">Medical Records</li>*/}
           </ul>
         </div>
 

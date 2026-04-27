@@ -26,7 +26,7 @@ const hospitals = [
       "Verka booth, Main gate, rajindra hospital, Sangrur road, beside Rajindera hospital, New Lal Bagh Colony, Patiala, Punjab 147001",
     phone: "0175 221 2542",
     website: "https://www.rajindrahospital.com",
-    image: "/hospitals/hospital3.jpg",
+    image: "/images/hospitals/hospital3.jpg",
   },
   {
     name: "Park Hospital",
@@ -34,7 +34,7 @@ const hospitals = [
     address: "Heera Bagh, Patiala, Punjab 147002",
     phone: "07448000000",
     website: "https://www.parkhospital.in/",
-    image: "/hospitals/hospital4.jpg",
+    image: "/images/hospitals/hospital4.webp",
   },
   {
     name: "Patiala Heart Institute and Multispeciality Hospital",
@@ -83,7 +83,7 @@ export default function HospitalsPage() {
                   <Image
                     src={hospital.image}
                     alt={hospital.name}
-                    width={300}
+                    width={600}
                     height={400}
                   />
                 </div>

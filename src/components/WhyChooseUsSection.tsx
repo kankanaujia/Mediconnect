@@ -48,7 +48,7 @@ export default function WhyChooseUsSection() {
           {/* Top Wide */}
           <div className="col-span-2 h-45 rounded-2xl overflow-hidden shadow-md">
             <img
-              src="/why1.jpg"
+              src="images/why1.png"
               alt=""
               className="w-full h-full object-cover"
             />
@@ -57,7 +57,7 @@ export default function WhyChooseUsSection() {
           {/* Middle Left */}
           <div className="h-35 rounded-2xl overflow-hidden shadow-md">
             <img
-              src="/why2.jpg"
+              src="images/why2.png"
               alt=""
               className="w-full h-full object-cover"
             />
@@ -66,7 +66,7 @@ export default function WhyChooseUsSection() {
           {/* Middle Right */}
           <div className="h-35 rounded-2xl overflow-hidden shadow-md">
             <img
-              src="/why3.jpg"
+              src="images/why3.png"
               alt=""
               className="w-full h-full object-cover"
             />
@@ -75,7 +75,7 @@ export default function WhyChooseUsSection() {
           {/* Bottom Wide */}
           <div className="col-span-2 h-45 rounded-2xl overflow-hidden shadow-md">
             <img
-              src="/why4.jpg"
+              src="images/why4.png"
               alt=""
               className="w-full h-full object-cover"
             />

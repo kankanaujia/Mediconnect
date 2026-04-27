@@ -1,6 +1,9 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 export default function CTASection() {
+
+  const router = useRouter();
   return (
     <section className="w-full bg-[#edf4f8] py-40 text-center relative overflow-hidden">
 
@@ -31,7 +34,10 @@ export default function CTASection() {
         <div className="mt-10 flex items-center justify-center gap-6">
 
           {/* PRIMARY */}
-          <button className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#9fc3d9] to-[#8fb4c9] text-gray-800 font-serif font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2">
+          <button
+              onClick={() => router.push("/patient_Signup")}
+
+          className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#9fc3d9] to-[#8fb4c9] text-gray-800 font-serif font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2">
             ✨ Create Patient Account →
           </button>
 

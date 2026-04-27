@@ -778,21 +778,21 @@ export default function PatientDashboard() {
             <div className="space-y-4">
               <button
                 onClick={() => router.push("/book-appointment")}
-                className="w-full rounded-lg border bg-white p-4 text-left transition hover:shadow"
+                className="w-full rounded-lg border bg-white text-gray-800 p-4 text-left transition hover:shadow"
               >
                 Book Special Appointment
               </button>
 
               <button
                 onClick={() => setShowSlotModal(true)}
-                className="w-full rounded-lg border bg-white p-4 text-left transition hover:shadow"
+                className="w-full rounded-lg border bg-white p-4 text-gray-800 text-left transition hover:shadow"
               >
                 View Slots
               </button>
 
               <button
                 onClick={() => router.push("/Hospitals")}
-                className="w-full rounded-lg border bg-white p-4 text-left transition hover:shadow"
+                className="w-full rounded-lg border bg-white p-4 text-gray-800 text-left transition hover:shadow"
               >
                 Find Hospitals
               </button>
@@ -835,7 +835,7 @@ export default function PatientDashboard() {
       </div>
 
       {showProfile && (
-        <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/30 px-4 py-10 backdrop-blur-[2px]">
+        <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/30 px-4 py-24 backdrop-blur-[2px]">
           <div className="w-full max-w-2xl rounded-[28px] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.25)] sm:p-8">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>

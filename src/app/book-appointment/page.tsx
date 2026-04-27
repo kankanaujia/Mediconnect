@@ -220,7 +220,7 @@ export default function BookAppointment() {
             a 20 minute slot.
           </p>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
+          <div className="mt-8 grid gap-4 md:grid-cols-2 text-gray-800">
             <select
               value={selectedHospitalId}
               onChange={(e) => {
@@ -229,7 +229,7 @@ export default function BookAppointment() {
                 setSelectedDoctorId("");
                 setSelectedTime("");
               }}
-              className="rounded-2xl border border-gray-200 p-4"
+              className="rounded-2xl border border-gray-200 p-2 text-gray-800"
             >
               <option value="">Select Hospital</option>
               {hospitals.map((hospital) => (
@@ -246,7 +246,7 @@ export default function BookAppointment() {
                 setSelectedDoctorId("");
                 setSelectedTime("");
               }}
-              className="rounded-2xl border border-gray-200 p-4"
+              className="rounded-2xl border border-gray-200 p-4 text-gray-800"
             >
               <option value="">Select Specialist</option>
               {specializations.map((specialization) => (
@@ -279,7 +279,7 @@ export default function BookAppointment() {
                 setSelectedDate(e.target.value);
                 setSelectedTime("");
               }}
-              className="rounded-2xl border border-gray-200 p-4"
+              className="rounded-2xl border text-gray-800 border-gray-200 p-4"
             />
           </div>
 
@@ -287,7 +287,7 @@ export default function BookAppointment() {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Reason for special appointment"
-            className="mt-4 min-h-120px w-full rounded-2xl border border-gray-200 p-4"
+            className="mt-4 min-h-120px w-full rounded-2xl border text-gray-800 border-gray-200 p-4"
           />
 
           <div className="mt-8">

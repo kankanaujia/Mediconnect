@@ -6,7 +6,6 @@ export default function FinalCTASection() {
   return (
     <section className="w-full bg-white py-40 text-center">
       <div className="max-w-3xl mx-auto px-6">
-
         {/* HEADING */}
         <h2 className="text-[62px] font-serif font-extrabold text-gray-800 leading-tight">
           Ready to Prioritize
@@ -22,21 +21,19 @@ export default function FinalCTASection() {
 
         {/* BUTTONS */}
         <div className="mt-10 flex justify-center gap-6">
-
           {/* PRIMARY */}
-          <Link href="/doctors">
-            <button className="px-8 py-4 bg-gray-800 text-white font-serif rounded-md font-medium hover:bg-gray-900 transition">
+          <Link href="/Doctors">
+            <button className="px-8 py-4 bg-gray-800 text-white font-serif rounded-md font-medium hover:bg-gray-900 transition cursor-pointer">
               Browse Doctors
             </button>
           </Link>
 
           {/* SECONDARY */}
-          <Link href="/hospitals">
-            <button className="px-8 py-4 border border-gray-400 text-gray-700 font-serif rounded-md font-medium hover:bg-gray-100 transition">
+          <Link href="/Hospitals">
+            <button className="px-8 py-4 border border-gray-400 text-gray-700 font-serif rounded-md font-medium hover:bg-gray-100 transition cursor-pointer">
               View Hospitals
             </button>
           </Link>
-
         </div>
       </div>
     </section>

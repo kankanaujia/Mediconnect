@@ -20,8 +20,8 @@ export default function Navbar() {
   // ❌ REMOVED login links from here
   const navLinks = [
     { name: "Home", href: "/" },
-    { name: "Doctors", href: "/Doctors" },
     { name: "Hospitals", href: "/Hospitals" },
+    { name: "Doctors", href: "/Doctors" },
   ];
 
   return (
@@ -66,13 +66,13 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
 
           <Link href="/Patient_login">
-            <button className="px-5 py-2 rounded-full font-serif bg-gray-900 text-white hover:bg-gray-800 transition">
+            <button className="px-5 py-2 rounded-full font-serif bg-gray-200 text-gray-700 hover:bg-gray-400 transition">
               Patient Login
             </button>
           </Link>
 
           <Link href="/Doctor_login">
-            <button className="px-5 py-2 rounded-full font-serif bg-gray-200 text-gray-700 hover:bg-gray-300 transition">
+            <button className="px-5 py-2 rounded-full font-serif bg-gray-200 text-gray-700 hover:bg-gray-400 transition">
               Doctor Login
             </button>
           </Link>
