@@ -103,32 +103,32 @@ export default function DoctorsPage() {
               {
                 name: "Dr. Kanishka Kanaujia",
                 spec: "Neurology",
-                image: "/images/doctors/doc1.jpeg",
+                image: "/images/Doctors/doc1.jpeg",
               },
               {
                 name: "Dr. Dhruv Gupta",
                 spec: "Pediatrics",
-                image: "/images/doctors/doc2.jpeg",
+                image: "/images/Doctors/doc2.jpeg",
               },
               {
                 name: "Dr. Elisha",
                 spec: "Dermatology",
-                image: "/images/doctors/doc3.jpg",
+                image: "/images/Doctors/doc3.jpeg",
               },
               {
                 name: "Dr. Harshita",
                 spec: "Orthopedics",
-                image: "/images/doctors/doc4.jpg",
+                image: "/images/Doctors/doc4.jpeg",
               },
               {
                 name: "Dr. Namya Jain",
                 spec: "Cardiology",
-                image: "/images/doctors/doc5.jpg",
+                image: "/images/Doctors/doc5.jpeg",
               },
               {
                 name: "Dr. Chenika",
                 spec: "Psychology",
-                image: "/images/doctors/doc6.jpg",
+                image: "/images/Doctors/doc6.jpeg",
               },
             ].map((doc, i) => (
               <div key={i} className="border p-6 rounded-xl">
