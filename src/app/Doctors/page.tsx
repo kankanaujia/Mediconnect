@@ -108,7 +108,7 @@ export default function DoctorsPage() {
               {
                 name: "Dr. Dhruv Gupta",
                 spec: "Pediatrics",
-                image: "/images/doctors/doc2.jpg",
+                image: "/images/doctors/doc2.jpeg",
               },
               {
                 name: "Dr. Elisha",
