@@ -107,12 +107,12 @@ export default function DoctorsPage() {
               },
               {
                 name: "Dr. Dhruv Gupta",
-                spec: "Pediatrics",
+                spec: "Neurology",
                 image: "/images/Doctors/doc2.jpeg",
               },
               {
                 name: "Dr. Elisha",
-                spec: "Dermatology",
+                spec: "Neurology",
                 image: "/images/Doctors/doc3.jpeg",
               },
               {
@@ -122,7 +122,7 @@ export default function DoctorsPage() {
               },
               {
                 name: "Dr. Namya Jain",
-                spec: "Cardiology",
+                spec: "Gastroenterology",
                 image: "/images/Doctors/doc5.jpeg",
               },
               {
