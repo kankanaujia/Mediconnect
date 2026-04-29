@@ -113,12 +113,12 @@ export default function PatientLoginPage() {
             Sign up here
           </Link>
         </p>
-
+        {/*
         <div className="mt-6 rounded-lg bg-[#dbeafe] p-4 text-sm text-gray-700">
           <p className="mb-1 font-medium">Demo Credentials:</p>
           <p>Email: patient@demo.com</p>
           <p>Password: demo123</p>
-        </div>
+        </div>*/}
 
         <p className="mt-6 text-center text-sm text-gray-500">
           Are you a doctor?{" "}

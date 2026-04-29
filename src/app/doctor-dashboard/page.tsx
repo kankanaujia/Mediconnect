@@ -15,6 +15,7 @@ import {
   type ScheduleCategory,
   type ScheduleEntry,
 } from "@/lib/doctorSchedule";
+import { supabase } from "@/lib/supabase";
 
 type Slot = {
   id: string;
@@ -39,7 +40,6 @@ type Booking = {
     paymentStatus?: "pending" | "paid" | "failed";
   };
   patient_name: string;
-  hospital_name: string;
 };
 
 type DoctorUser = {
@@ -48,6 +48,7 @@ type DoctorUser = {
   email: string;
   specialization?: string;
   hospital_id?: string;
+  hospital_name?: string;
 };
 
 const scheduleCategories: ScheduleCategory[] = [
@@ -96,30 +97,59 @@ export default function DoctorDashboard() {
 
     const parsed = JSON.parse(storedUser) as DoctorUser;
     setUser(parsed);
+    void loadHospitalName(parsed);
     void loadDoctorData(parsed.id);
   }, [router]);
+
+  const loadHospitalName = async (doctor: DoctorUser) => {
+    if (!doctor.hospital_id) return;
+
+    const { data, error } = await supabase
+      .from("hospitals")
+      .select("name")
+      .eq("id", doctor.hospital_id)
+      .single();
+
+    if (error || !data?.name) {
+      console.error("Error loading hospital name:", error);
+      return;
+    }
+
+    const updatedDoctor = {
+      ...doctor,
+      hospital_name: data.name,
+    };
+
+    setUser(updatedDoctor);
+    localStorage.setItem("doctor", JSON.stringify(updatedDoctor));
+  };
 
   const loadDoctorData = async (doctorId: string) => {
     setLoading(true);
 
-    const [slotsRes, bookingsRes, schedulesRes] = await Promise.all([
-      fetch(`/api/slots?doctor_id=${doctorId}`),
-      fetch(`/api/bookings?doctor_id=${doctorId}`),
-      fetch(`/api/schedules?doctor_id=${doctorId}`),
-    ]);
+    try {
+      const [slotsRes, bookingsRes, schedulesRes] = await Promise.all([
+        fetch(`/api/slots?doctor_id=${doctorId}`),
+        fetch(`/api/bookings?doctor_id=${doctorId}`),
+        fetch(`/api/schedules?doctor_id=${doctorId}`),
+      ]);
 
-    const [slotsData, bookingsData, schedulesData] = await Promise.all([
-      slotsRes.json(),
-      bookingsRes.json(),
-      schedulesRes.json(),
-    ]);
+      const [slotsData, bookingsData, schedulesData] = await Promise.all([
+        slotsRes.json(),
+        bookingsRes.json(),
+        schedulesRes.json(),
+      ]);
 
-    setSlots(Array.isArray(slotsData) ? slotsData : []);
-    setBookings(Array.isArray(bookingsData) ? bookingsData : []);
-    setSchedules(
-      Array.isArray(schedulesData) ? sortSchedules(schedulesData) : [],
-    );
-    setLoading(false);
+      setSlots(Array.isArray(slotsData) ? slotsData : []);
+      setBookings(Array.isArray(bookingsData) ? bookingsData : []);
+      setSchedules(
+        Array.isArray(schedulesData) ? sortSchedules(schedulesData) : [],
+      );
+    } catch (error) {
+      console.error("Error loading doctor data:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const activeBookings = useMemo(
@@ -276,7 +306,7 @@ export default function DoctorDashboard() {
       title: entry.title,
       startTime: entry.startTime,
       endTime: entry.endTime,
-      notes: entry.notes,
+      notes: entry.notes || "",
     });
   };
 
@@ -320,21 +350,152 @@ export default function DoctorDashboard() {
     );
   };
 
+  // 🔥 AUTO GENERATE WEEKLY SCHEDULE (1-hour blocks)
+  const autoGenerateWeeklySchedule = async () => {
+    if (!user) return;
+
+    let newSchedules: any[] = [];
+
+    for (let day = 0; day < 7; day++) {
+      for (let hour = 9; hour < 17; hour++) {
+        newSchedules.push({
+          doctor_id: user.id,
+          dayOfWeek: day,
+          title: "Daily Slot 1",
+          startTime: `${String(hour).padStart(2, "0")}:00`,
+          endTime: `${String(hour + 1).padStart(2, "0")}:00`,
+          notes: "Auto-generated",
+        });
+      }
+    }
+
+    const existing = new Set(
+      schedules.map(
+        (s) => `${Number(s.dayOfWeek)}-${s.startTime}-${s.endTime}`
+      ),
+    );
+
+    const filtered = newSchedules.filter(
+      (s) => !existing.has(`${s.dayOfWeek}-${s.startTime}-${s.endTime}`),
+    );
+
+    if (filtered.length === 0) {
+      alert("Schedule already exists");
+      return;
+    }
+
+    await fetch("/api/schedules/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ schedules: filtered }),
+    });
+
+    await loadDoctorData(user.id);
+  };
+
+  // 🔥 GENERATE SLOTS FROM SCHEDULE (NEXT 7 DAYS)
+  const generateSlotsFromSchedule = async () => {
+    if (!user || schedules.length === 0) {
+      alert("No schedule found");
+      return;
+    }
+
+    try {
+      const today = new Date();
+      let newSlots: any[] = [];
+
+      for (let i = 0; i < 7; i++) {
+        const current = new Date();
+        current.setDate(today.getDate() + i);
+
+        const daySchedules = schedules.filter(
+          (s) => Number(s.dayOfWeek) === current.getDay()
+        );
+
+        for (const sch of daySchedules) {
+          let start = new Date(current);
+          let end = new Date(current);
+
+          const [sh, sm] = sch.startTime.split(":");
+          const [eh, em] = sch.endTime.split(":");
+
+          start.setHours(+sh, +sm, 0);
+          end.setHours(+eh, +em, 0);
+
+          while (start < end) {
+            const slotTime = new Date(start);
+
+            // ✅ skip only past slots correctly
+            if (slotTime > new Date()) {
+              newSlots.push({
+                doctor_id: user.id,
+                date: slotTime.toISOString(),
+                duration: 60,
+                location: "Clinic",
+              });
+            }
+
+            start.setMinutes(start.getMinutes() + 60);
+          }
+        }
+      }
+
+      // ✅ remove duplicates
+      const existing = new Set(slots.map((s) => s.date));
+      const filtered = newSlots.filter((s) => !existing.has(s.date));
+
+      if (filtered.length === 0) {
+        alert("No new slots generated (already exists)");
+        return;
+      }
+
+      const res = await fetch("/api/slots/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slots: filtered }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err?.error || "Failed to insert slots");
+        return;
+      }
+
+      alert(`${filtered.length} slots generated successfully`);
+
+      await loadDoctorData(user.id);
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong");
+    }
+  };
+
   if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 px-6 py-24 lg:px-24">
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-4xl font-bold text-gray-800">Doctor Dashboard</h1>
-          <p className="mt-1 text-gray-500">
-            Welcome, {user.name || user.email}
+          <p className="mt-2 text-xl font-medium text-gray-700">
+            Welcome, {user.name || user.email.split('@')[0]}
           </p>
+          {(user.specialization || user.hospital_name) && (
+            <p className="mt-1 flex items-center gap-2 text-sm text-gray-500 font-medium">
+              {user.specialization && <span>{user.specialization}</span>}
+              {user.specialization && user.hospital_name && (
+                <span className="text-gray-300">|</span>
+              )}
+              {user.hospital_name && <span>{user.hospital_name}</span>}
+            </p>
+          )}
         </div>
 
         <button
           onClick={handleLogout}
-          className="rounded-lg bg-red-100 px-5 py-2 text-red-600 hover:bg-red-200"
+          className="rounded-lg bg-red-100 px-5 py-2 text-red-600 hover:bg-red-200 transition-colors"
         >
           Logout
         </button>
@@ -368,6 +529,7 @@ export default function DoctorDashboard() {
             >
               <input
                 type="datetime-local"
+                min={new Date().toISOString().slice(0, 16)}
                 value={slotForm.date}
                 onChange={(e) =>
                   setSlotForm((prev) => ({ ...prev, date: e.target.value }))
@@ -399,16 +561,16 @@ export default function DoctorDashboard() {
                 required
               />
 
-              <button className="col-span-full rounded-lg bg-gray-800 py-3 text-white hover:bg-black">
+              <button className="col-span-full rounded-lg bg-gray-800 py-3 text-white hover:bg-black transition-colors">
                 Create Daily Slot
               </button>
             </form>
 
             <div className="mt-6 space-y-4">
               {loading ? (
-                <p className="text-sm text-gray-500">Loading slots...</p>
+                <p className="text-sm text-gray-500 animate-pulse">Loading slots...</p>
               ) : availableSlots.length === 0 ? (
-                <p className="rounded-xl bg-white p-4 text-sm text-gray-500">
+                <p className="rounded-xl bg-white p-4 text-sm text-gray-500 shadow-sm">
                   No open daily slots yet.
                 </p>
               ) : (
@@ -418,7 +580,7 @@ export default function DoctorDashboard() {
                     className="flex flex-col justify-between gap-4 rounded-xl bg-white p-5 shadow-sm md:flex-row md:items-center"
                   >
                     <div>
-                      <p className="text-gray-700">
+                      <p className="text-gray-700 font-medium">
                         {new Date(slot.date).toLocaleDateString()} at{" "}
                         {new Date(slot.date).toLocaleTimeString([], {
                           hour: "2-digit",
@@ -434,14 +596,14 @@ export default function DoctorDashboard() {
                       <button
                         type="button"
                         onClick={() => setEditingSlot(slot)}
-                        className="rounded-lg bg-blue-100 px-3 py-2 text-blue-600"
+                        className="rounded-lg bg-blue-100 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-200 transition-colors"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => void handleDeleteSlot(slot.id)}
-                        className="rounded-lg bg-red-100 px-3 py-2 text-red-600"
+                        className="rounded-lg bg-red-100 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-200 transition-colors"
                       >
                         Delete
                       </button>
@@ -468,15 +630,15 @@ export default function DoctorDashboard() {
                 bookings.map((booking) => (
                   <div
                     key={booking.id}
-                    className="rounded-xl border border-gray-200 p-5"
+                    className="rounded-xl border border-gray-200 p-5 hover:border-gray-300 transition-colors"
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                       <div className="space-y-1">
                         <p className="text-lg font-semibold text-gray-900">
                           {booking.patient_name}
                         </p>
-                        <p className="text-sm text-gray-500">
-                          {booking.hospital_name} •{" "}
+                        <p className="text-sm text-gray-500 font-medium">
+                          {booking.hospital_id} •{" "}
                           {booking.meta.kind === "special"
                             ? "Special Appointment"
                             : "Daily Slot"}
@@ -486,8 +648,8 @@ export default function DoctorDashboard() {
                           {booking.appointment_time}
                         </p>
                         {booking.reason ? (
-                          <p className="text-sm text-gray-600">
-                            Reason: {booking.reason}
+                          <p className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded-md">
+                            <span className="font-medium text-gray-700">Reason:</span> {booking.reason}
                           </p>
                         ) : null}
                       </div>
@@ -520,7 +682,7 @@ export default function DoctorDashboard() {
                           <button
                             type="button"
                             onClick={() => void handleMarkCompleted(booking.id)}
-                            className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white hover:bg-black"
+                            className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white hover:bg-black transition-colors"
                           >
                             Mark Completed
                           </button>
@@ -536,12 +698,31 @@ export default function DoctorDashboard() {
 
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-2xl font-semibold text-gray-900">
-            Daily Schedule
+            Daily Schedule - Time Table
           </h2>
           <p className="mb-5 text-sm text-gray-500">
             Manage the order of daily slots, rounds, patient visitation, and
             special appointments.
           </p>
+
+          {/*
+          <div className="mb-4 flex flex-col xl:flex-row gap-3">
+            <button
+              type="button"
+              onClick={autoGenerateWeeklySchedule}
+              className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              Auto Generate Schedule
+            </button>
+
+            <button
+              type="button"
+              onClick={generateSlotsFromSchedule}
+              className="flex-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+            >
+              Generate Slots
+            </button>
+          </div>*/}
 
           <form
             onSubmit={handleSaveSchedule}
@@ -599,13 +780,13 @@ export default function DoctorDashboard() {
               value={scheduleForm.notes}
               onChange={handleScheduleChange}
               placeholder="Notes for hospital staff"
-              className="min-h-88px w-full rounded-lg border bg-white p-3"
+              className="min-h-[88px] w-full rounded-lg border bg-white p-3 resize-y"
             />
 
             <div className="flex gap-3">
               <button
                 type="submit"
-                className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white hover:bg-black"
+                className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white hover:bg-black transition-colors"
               >
                 {editingScheduleId ? "Update Schedule" : "Add Schedule Item"}
               </button>
@@ -617,7 +798,7 @@ export default function DoctorDashboard() {
                     setEditingScheduleId(null);
                     setScheduleForm(emptyScheduleForm);
                   }}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700"
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>
@@ -634,29 +815,29 @@ export default function DoctorDashboard() {
               schedules.map((entry) => (
                 <div
                   key={entry.id}
-                  className="rounded-xl border border-gray-200 p-4"
+                  className="rounded-xl border border-gray-200 p-4 hover:border-gray-300 transition-colors"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-semibold text-gray-900">
                         {entry.title}
                       </p>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm font-medium text-blue-600 mt-1">
                         {dayOptions[entry.dayOfWeek]} • {entry.startTime} -{" "}
                         {entry.endTime}
                       </p>
                       {entry.notes ? (
-                        <p className="mt-2 text-sm text-gray-600">
+                        <p className="mt-2 text-sm text-gray-600 bg-gray-50 p-2 rounded-md">
                           {entry.notes}
                         </p>
                       ) : null}
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleEditSchedule(entry)}
-                        className="rounded-lg bg-blue-100 p-2 text-blue-600"
+                        className="rounded-lg bg-blue-100 p-2 text-blue-600 hover:bg-blue-200 transition-colors"
                         aria-label="Edit schedule"
                       >
                         <PencilLine className="h-4 w-4" />
@@ -665,7 +846,7 @@ export default function DoctorDashboard() {
                         <button
                           type="button"
                           onClick={() => void handleDeleteSchedule(entry.id!)}
-                          className="rounded-lg bg-red-100 p-2 text-red-600"
+                          className="rounded-lg bg-red-100 p-2 text-red-600 hover:bg-red-200 transition-colors"
                           aria-label="Delete schedule"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -681,8 +862,8 @@ export default function DoctorDashboard() {
       </div>
 
       {editingSlot ? (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-xl font-semibold text-gray-900">Edit Slot</h3>
 
             <input
@@ -693,7 +874,7 @@ export default function DoctorDashboard() {
                   prev ? { ...prev, date: e.target.value } : prev,
                 )
               }
-              className="w-full rounded-lg border p-3"
+              className="w-full rounded-lg border p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
 
             <input
@@ -706,7 +887,7 @@ export default function DoctorDashboard() {
                   prev ? { ...prev, duration: Number(e.target.value) } : prev,
                 )
               }
-              className="w-full rounded-lg border p-3"
+              className="w-full rounded-lg border p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
 
             <input
@@ -717,23 +898,23 @@ export default function DoctorDashboard() {
                   prev ? { ...prev, location: e.target.value } : prev,
                 )
               }
-              className="w-full rounded-lg border p-3"
+              className="w-full rounded-lg border p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none"
             />
 
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-3 mt-6">
               <button
                 type="button"
                 onClick={() => setEditingSlot(null)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => void handleUpdateSlot()}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-white"
+                className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors"
               >
-                Save
+                Save Changes
               </button>
             </div>
           </div>

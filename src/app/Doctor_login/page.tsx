@@ -147,12 +147,12 @@ if (
           </Link>
         </p>
 
-        {/* DEMO BOX */}
+        {/* DEMO BOX 
         <div className="mt-6 bg-[#dbeafe] text-gray-700 p-4 rounded-lg text-sm">
           <p className="font-medium mb-1">Demo Credentials:</p>
           <p>Email: doctor@demo.com</p>
           <p>Password: demo123</p>
-        </div>
+        </div>*/}
 
         {/* FOOT NOTE */}
         <p className="text-center text-sm text-gray-500 mt-6">
