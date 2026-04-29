@@ -629,7 +629,7 @@ export default function PatientDashboard() {
       <div className="mb-12 flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold text-gray-800">Dashboard</h1>
-          <p className="mt-2 text-gray-500">Welcome back, {displayName}<br/>
+          <p className="mt-2 text-gray-500">Welcome {displayName}<br/>
           
 
           </p>
