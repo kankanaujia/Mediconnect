@@ -8,7 +8,7 @@ export default function CTASection() {
     <section className="w-full bg-[#edf4f8] py-40 text-center relative overflow-hidden">
 
       {/* SOFT GRADIENT GLOW (background feel) */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(150,200,230,0.25),transparent_70%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(150,200,230,0.25),transparent_70%)] pointer-events-none" />
 
       <div className="max-w-4xl mx-auto px-6 relative z-10">
 
@@ -37,14 +37,19 @@ export default function CTASection() {
           <button
               onClick={() => router.push("/patient_Signup")}
 
-          className="px-8 py-4 rounded-xl bg-gradient-to-r from-[#9fc3d9] to-[#8fb4c9] text-gray-800 font-serif font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2">
+          className="px-8 py-4 rounded-xl bg-linear-to-r from-[#9fc3d9] to-[#8fb4c9] text-gray-800 font-serif font-medium shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2">
             ✨ Create Patient Account →
           </button>
 
           {/* SECONDARY */}
-          <button className="px-8 py-4 rounded-xl border border-gray-400 text-gray-700 font-serif font-medium hover:bg-gray-100 transition-all duration-200">
+          <a
+            href="https://forms.gle/DLLxEJAweFPgXA8VA"
+            target="_blank"
+            rel="noreferrer"
+            className="px-8 py-4 rounded-xl border border-gray-400 text-gray-700 font-serif font-medium hover:bg-gray-100 transition-all duration-200"
+          >
             Doctor Sign Up
-          </button>
+          </a>
 
         </div>
       </div>

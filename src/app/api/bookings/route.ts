@@ -119,6 +119,25 @@ export async function POST(req: Request) {
     currency: bookingCurrency,
   });
 
+  if (kind === "daily" && body.slot_id) {
+    const { data: slot, error: slotError } = await supabaseAdmin
+      .from("slots")
+      .select("id, is_booked")
+      .eq("id", body.slot_id)
+      .single();
+
+    if (slotError || !slot) {
+      return NextResponse.json({ error: "Slot not found" }, { status: 404 });
+    }
+
+    if (slot.is_booked) {
+      return NextResponse.json(
+        { error: "This slot has already been booked." },
+        { status: 409 },
+      );
+    }
+  }
+
   const { data: existingData } = await supabaseAdmin
     .from("bookings")
     .select("*")
@@ -166,6 +185,13 @@ export async function POST(req: Request) {
     );
   }
 
+  if (kind === "daily" && body.slot_id) {
+    await supabaseAdmin
+      .from("slots")
+      .update({ is_booked: true })
+      .eq("id", body.slot_id);
+  }
+
   const [booking] = await enrichBookings([data as BookingRow]);
   return NextResponse.json(booking, { status: 200 });
 }
@@ -199,6 +225,9 @@ export async function PUT(req: Request) {
   }
 
   const parsed = parseBookingReason((current as BookingRow).reason);
+  const prevSlotId = typeof parsed.meta.slotId === "string" ? parsed.meta.slotId : undefined;
+  const nextSlotId =
+    meta && typeof (meta as any).slotId === "string" ? ((meta as any).slotId as string) : undefined;
 
   const nextDate = appointment_date ?? current.appointment_date;
   const nextTime = appointment_time ?? current.appointment_time;
@@ -257,6 +286,13 @@ export async function PUT(req: Request) {
       { error: error?.message || "Failed to update booking" },
       { status: 500 }
     );
+  }
+
+  if (parsed.meta.kind === "daily" && prevSlotId && nextSlotId && prevSlotId !== nextSlotId) {
+    await Promise.all([
+      supabaseAdmin.from("slots").update({ is_booked: false }).eq("id", prevSlotId),
+      supabaseAdmin.from("slots").update({ is_booked: true }).eq("id", nextSlotId),
+    ]);
   }
 
   const [booking] = await enrichBookings([data as BookingRow]);

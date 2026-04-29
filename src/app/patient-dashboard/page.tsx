@@ -112,6 +112,7 @@ export default function PatientDashboard() {
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [availableSlots, setAvailableSlots] = useState<Slot[]>([]);
+  const [slotPickerDateFilter, setSlotPickerDateFilter] = useState<string>("all");
   const [editAvailableSlots, setEditAvailableSlots] = useState<Slot[]>([]);
   const [editAvailableTimes, setEditAvailableTimes] = useState<string[]>([]);
   const [slotSelection, setSlotSelection] = useState(emptySlotSelection);
@@ -176,6 +177,10 @@ export default function PatientDashboard() {
   }, [slotSelection.doctorId]);
 
   useEffect(() => {
+    setSlotPickerDateFilter("all");
+  }, [slotSelection.doctorId, showSlotModal]);
+
+  useEffect(() => {
     if (
       !editingBooking ||
       editingBooking.meta.kind !== "special" ||
@@ -235,6 +240,20 @@ export default function PatientDashboard() {
       return hospitalMatch && specializationMatch;
     });
   }, [doctors, slotSelection.hospitalId, slotSelection.specialization]);
+
+  const availableSlotDates = useMemo(() => {
+    const dates = new Set(
+      availableSlots.map((slot) => new Date(slot.date).toISOString().slice(0, 10)),
+    );
+    return Array.from(dates).sort();
+  }, [availableSlots]);
+
+  const filteredAvailableSlots = useMemo(() => {
+    if (slotPickerDateFilter === "all") return availableSlots;
+    return availableSlots.filter(
+      (slot) => new Date(slot.date).toISOString().slice(0, 10) === slotPickerDateFilter,
+    );
+  }, [availableSlots, slotPickerDateFilter]);
 
   const specializations = useMemo(() => {
     const relevantDoctors = doctors.filter((doctor) =>
@@ -682,7 +701,7 @@ export default function PatientDashboard() {
                         <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-700">
                           {booking.meta.kind === "special"
                             ? "Special Appointment"
-                            : "Daily Slot"}
+                            : "Regular (Daily) Slot"}
                         </span>
                         <span
                           className={`rounded-full px-3 py-1 text-xs ${
@@ -971,7 +990,7 @@ export default function PatientDashboard() {
       )}
 
       {showSlotModal && (
-        <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/30 px-4 py-24 backdrop-blur-[2px]c text-gray-700">
+        <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/30 px-4 py-24 pd-10 backdrop-blur-[2px]c text-gray-700">
           <div className="w-full max-w-4xl rounded-[28px] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.25)] sm:p-8 text-gray-700">
             <div className="mb-6 flex items-start justify-between gap-4 text-gray-700">
               <div>
@@ -990,6 +1009,7 @@ export default function PatientDashboard() {
                   setShowSlotModal(false);
                   setSlotSelection(emptySlotSelection);
                   setAvailableSlots([]);
+                  setSlotPickerDateFilter("all");
                 }}
                 className="rounded-full border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-100"
                 aria-label="Close slot selector"
@@ -1057,6 +1077,33 @@ export default function PatientDashboard() {
               </select>
             </div>
 
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Filter by date
+                </p>
+                <select
+                  value={slotPickerDateFilter}
+                  onChange={(e) => setSlotPickerDateFilter(e.target.value)}
+                  disabled={availableSlotDates.length === 0}
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-800 disabled:opacity-60"
+                >
+                  <option value="all">All dates</option>
+                  {availableSlotDates.map((date) => {
+                    const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString(
+                      undefined,
+                      { weekday: "long" },
+                    );
+                    return (
+                      <option key={date} value={date}>
+                        {dayLabel} • {date}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+
             <textarea
               value={slotSelection.reason}
               onChange={(e) =>
@@ -1079,36 +1126,65 @@ export default function PatientDashboard() {
                   Sorry, No Slots available.
                 </p>
               ) : (
-                availableSlots.map((slot) => (
-                  <div
-                    key={slot.id}
-                    className="flex flex-col justify-between gap-4 rounded-xl border border-gray-200 p-5 md:flex-row md:items-center"
-                  >
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {new Date(slot.date).toLocaleDateString()} at{" "}
-                        {new Date(slot.date).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {slot.duration} min • {slot.location}
-                      </p>
-                    </div>
+                (() => {
+                  const grouped = filteredAvailableSlots.reduce(
+                    (acc, slot) => {
+                      const date = new Date(slot.date).toISOString().slice(0, 10);
+                      (acc[date] ??= []).push(slot);
+                      return acc;
+                    },
+                    {} as Record<string, Slot[]>,
+                  );
 
-                    <button
-                      type="button"
-                      disabled={bookingSlot === slot.id}
-                      onClick={() => void handleBookDailySlot(slot)}
-                      className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-[#161616] disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      {bookingSlot === slot.id
-                        ? "Booking..."
-                        : "Book This Slot"}
-                    </button>
-                  </div>
-                ))
+                  const dates = Object.keys(grouped).sort();
+
+                  return dates.map((date) => (
+                    <div key={date} className="space-y-3">
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+                            weekday: "long",
+                          })}{" "}
+                          • {date}
+                        </p>
+                      </div>
+
+                      {grouped[date]
+                        .slice()
+                        .sort(
+                          (a, b) =>
+                            new Date(a.date).getTime() - new Date(b.date).getTime(),
+                        )
+                        .map((slot) => (
+                          <div
+                            key={slot.id}
+                            className="flex flex-col justify-between gap-4 rounded-xl border border-gray-200 p-5 md:flex-row md:items-center"
+                          >
+                            <div>
+                              <p className="font-medium text-gray-900">
+                                {new Date(slot.date).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                {slot.duration} min • {slot.location}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={bookingSlot === slot.id}
+                              onClick={() => void handleBookDailySlot(slot)}
+                              className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-[#161616] disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              {bookingSlot === slot.id ? "Booking..." : "Book This Slot"}
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  ));
+                })()
               )}
             </div>
           </div>

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
 import {
   parseScheduleEntry,
-  serializeScheduleEntry,
   sortSchedules,
   type ScheduleEntry,
 } from "@/lib/doctorSchedule";
@@ -10,18 +9,27 @@ import {
 type ScheduleRow = {
   id: string;
   doctor_id: string;
-  day_of_week: string;
+  day_of_week: number | string;
+  title?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  notes?: string | null;
 };
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const doctor_id = searchParams.get("doctor_id");
 
+  if (!doctor_id) {
+    return NextResponse.json([], { status: 200 });
+  }
+
   const { data, error } = await supabaseAdmin
     .from("doctor_schedules")
-    .select("*")
+    .select("id, doctor_id, day_of_week, title, start_time, end_time, notes")
     .eq("doctor_id", doctor_id)
-    .order("day_of_week");
+    .order("day_of_week", { ascending: true })
+    .order("start_time", { ascending: true });
 
   if (error) {
     return NextResponse.json([], { status: 500 });
@@ -42,7 +50,11 @@ export async function POST(req: Request) {
     .insert([
       {
         doctor_id: body.doctor_id,
-        day_of_week: serializeScheduleEntry(body),
+        day_of_week: body.dayOfWeek,
+        title: body.title,
+        start_time: body.startTime,
+        end_time: body.endTime,
+        notes: body.notes ?? "",
       },
     ])
     .select("*")
@@ -76,7 +88,11 @@ export async function PUT(req: Request) {
   const { data, error } = await supabaseAdmin
     .from("doctor_schedules")
     .update({
-      day_of_week: serializeScheduleEntry(body),
+      day_of_week: body.dayOfWeek,
+      title: body.title,
+      start_time: body.startTime,
+      end_time: body.endTime,
+      notes: body.notes ?? "",
     })
     .eq("id", body.id)
     .select("*")

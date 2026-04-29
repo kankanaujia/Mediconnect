@@ -43,7 +43,29 @@ export function parseScheduleEntry(row: {
   id?: string;
   doctor_id?: string;
   day_of_week?: string | number | null;
+  title?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  notes?: string | null;
 }) {
+  // Preferred normalized row format (Supabase columns)
+  if (
+    typeof row.day_of_week === "number" &&
+    row.start_time &&
+    row.end_time &&
+    row.title
+  ) {
+    return {
+      id: row.id,
+      doctor_id: row.doctor_id,
+      dayOfWeek: row.day_of_week,
+      title: (row.title as ScheduleCategory) ?? "Other",
+      startTime: String(row.start_time).slice(0, 5),
+      endTime: String(row.end_time).slice(0, 5),
+      notes: row.notes ?? "",
+    } satisfies ScheduleEntry;
+  }
+
   const raw = String(row.day_of_week ?? "");
 
   if (raw.startsWith(SCHEDULE_PREFIX)) {

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
-import { Loader2, LocateFixed } from "lucide-react";
+import { Eye, EyeOff, Loader2, LocateFixed } from "lucide-react";
 
 type SignupForm = {
   first_name: string;
@@ -25,6 +25,7 @@ export default function PatientSignup() {
 
   const [loading, setLoading] = useState(false);
   const [fetchingLocation, setFetchingLocation] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState<SignupForm>({
     first_name: "",
     last_name: "",
@@ -41,6 +42,12 @@ export default function PatientSignup() {
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    if (name === "phone") {
+      const digits = value.replace(/\D/g, "").slice(0, 10);
+      setFormData((prev) => ({ ...prev, phone: digits }));
+      return;
+    }
+
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -201,20 +208,36 @@ export default function PatientSignup() {
                     value={formData.email}
                     onChange={handleChange}
                     required
+                    autoComplete="email"
                     className={inputClassName}
                   />
                 </Field>
 
                 <Field label="Password *">
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                    minLength={6}
-                    className={inputClassName}
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                      minLength={6}
+                      autoComplete="new-password"
+                      className={`${inputClassName} pr-12`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-3 my-auto inline-flex h-10 w-10 items-center justify-center rounded-xl text-gray-600 transition hover:bg-gray-100"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
                 </Field>
 
                 <Field label="Phone Number *">
@@ -224,6 +247,12 @@ export default function PatientSignup() {
                     value={formData.phone}
                     onChange={handleChange}
                     required
+                    inputMode="numeric"
+                    pattern="^[0-9]{10}$"
+                    minLength={10}
+                    maxLength={10}
+                    autoComplete="tel"
+                    placeholder="10-digit phone number"
                     className={inputClassName}
                   />
                 </Field>

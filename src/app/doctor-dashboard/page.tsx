@@ -75,6 +75,8 @@ export default function DoctorDashboard() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
+  const [slotDateFilter, setSlotDateFilter] = useState<string>("all");
+  const [scheduleDayFilter, setScheduleDayFilter] = useState<string>("all");
   const [editingSlot, setEditingSlot] = useState<Slot | null>(null);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(
     null,
@@ -176,6 +178,27 @@ export default function DoctorDashboard() {
     () => slots.filter((slot) => !isSlotBooked(slot)),
     [slots, activeBookings],
   );
+
+  const availableSlotDates = useMemo(() => {
+    const dates = new Set(
+      availableSlots.map((slot) => new Date(slot.date).toISOString().slice(0, 10)),
+    );
+    return Array.from(dates).sort();
+  }, [availableSlots]);
+
+  const filteredAvailableSlots = useMemo(() => {
+    if (slotDateFilter === "all") return availableSlots;
+    return availableSlots.filter(
+      (slot) => new Date(slot.date).toISOString().slice(0, 10) === slotDateFilter,
+    );
+  }, [availableSlots, slotDateFilter]);
+
+  const filteredSchedules = useMemo(() => {
+    if (scheduleDayFilter === "all") return schedules;
+    const day = Number(scheduleDayFilter);
+    if (Number.isNaN(day)) return schedules;
+    return schedules.filter((entry) => Number(entry.dayOfWeek) === day);
+  }, [schedules, scheduleDayFilter]);
 
   const handleLogout = () => {
     localStorage.removeItem("doctor");
@@ -354,20 +377,31 @@ export default function DoctorDashboard() {
   const autoGenerateWeeklySchedule = async () => {
     if (!user) return;
 
-    let newSchedules: any[] = [];
+    const autoTitles: ScheduleCategory[] = [
+      "Daily Slot 1",
+      "Daily Slot 2",
+      "Daily Slot 3",
+      "Hospital Round",
+      "Patient Visitation",
+      "Special Appointment",
+      "Other",
+    ];
 
-    for (let day = 0; day < 7; day++) {
-      for (let hour = 9; hour < 17; hour++) {
-        newSchedules.push({
+    const dayStartHour = 9;
+
+    const newSchedules = Array.from({ length: 7 }).flatMap((_, day) =>
+      autoTitles.map((title, index) => {
+        const hour = dayStartHour + index;
+        return {
           doctor_id: user.id,
           dayOfWeek: day,
-          title: "Daily Slot 1",
+          title,
           startTime: `${String(hour).padStart(2, "0")}:00`,
           endTime: `${String(hour + 1).padStart(2, "0")}:00`,
           notes: "Auto-generated",
-        });
-      }
-    }
+        };
+      }),
+    );
 
     const existing = new Set(
       schedules.map(
@@ -384,11 +418,17 @@ export default function DoctorDashboard() {
       return;
     }
 
-    await fetch("/api/schedules/bulk", {
+    const res = await fetch("/api/schedules/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ schedules: filtered }),
     });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err?.error || "Failed to auto-generate schedules");
+      return;
+    }
 
     await loadDoctorData(user.id);
   };
@@ -574,7 +614,26 @@ export default function DoctorDashboard() {
                   No open daily slots yet.
                 </p>
               ) : (
-                availableSlots.map((slot) => (
+                <>
+                  <div className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+                    <p className="text-sm font-medium text-gray-700">
+                      Filter by date
+                    </p>
+                    <select
+                      value={slotDateFilter}
+                      onChange={(e) => setSlotDateFilter(e.target.value)}
+                      className="rounded-lg border bg-white p-2 text-sm text-gray-700"
+                    >
+                      <option value="all">All dates</option>
+                      {availableSlotDates.map((date) => (
+                        <option key={date} value={date}>
+                          {date}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {filteredAvailableSlots.map((slot) => (
                   <div
                     key={slot.id}
                     className="flex flex-col justify-between gap-4 rounded-xl bg-white p-5 shadow-sm md:flex-row md:items-center"
@@ -609,7 +668,8 @@ export default function DoctorDashboard() {
                       </button>
                     </div>
                   </div>
-                ))
+                  ))}
+                </>
               )}
             </div>
           </section>
@@ -705,7 +765,6 @@ export default function DoctorDashboard() {
             special appointments.
           </p>
 
-          {/*
           <div className="mb-4 flex flex-col xl:flex-row gap-3">
             <button
               type="button"
@@ -722,7 +781,9 @@ export default function DoctorDashboard() {
             >
               Generate Slots
             </button>
-          </div>*/}
+          </div>
+
+         
 
           <form
             onSubmit={handleSaveSchedule}
@@ -782,8 +843,7 @@ export default function DoctorDashboard() {
               placeholder="Notes for hospital staff"
               className="min-h-[88px] w-full rounded-lg border bg-white p-3 resize-y"
             />
-
-            <div className="flex gap-3">
+<div className="flex gap-3">
               <button
                 type="submit"
                 className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white hover:bg-black transition-colors"
@@ -802,17 +862,38 @@ export default function DoctorDashboard() {
                 >
                   Cancel
                 </button>
+
+                
               ) : null}
             </div>
+<div className="mb-4 rounded-xl bg-gray-50 p-4">
+            <label className="flex flex-col gap-2 text-sm font-medium text-gray-700">
+              Filter schedule by day
+              <select
+                value={scheduleDayFilter}
+                onChange={(e) => setScheduleDayFilter(e.target.value)}
+                className="rounded-lg border bg-white p-3 text-gray-700"
+              >
+                <option value="all">All days</option>
+                {dayOptions.map((day, index) => (
+                  <option key={day} value={index}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+            
           </form>
 
           <div className="mt-6 space-y-3">
-            {schedules.length === 0 ? (
+            {filteredSchedules.length === 0 ? (
               <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
-                No daily schedule items yet.
+                No schedule items for the selected day.
               </p>
             ) : (
-              schedules.map((entry) => (
+              filteredSchedules.map((entry) => (
                 <div
                   key={entry.id}
                   className="rounded-xl border border-gray-200 p-4 hover:border-gray-300 transition-colors"
@@ -860,6 +941,7 @@ export default function DoctorDashboard() {
           </div>
         </section>
       </div>
+      
 
       {editingSlot ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
