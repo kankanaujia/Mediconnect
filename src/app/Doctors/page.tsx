@@ -128,7 +128,7 @@ export default function DoctorsPage() {
               {
                 name: "Dr. Chenika",
                 spec: "Psychology",
-                image: "/images/Doctors/doc6.jpeg",
+                image: "/images/Doctors/Doc6.jpeg",
               },
             ].map((doc, i) => (
               <div key={i} className="border p-6 rounded-xl">
