@@ -142,7 +142,7 @@ if (
         {/* SIGN UP */}
         <p className="text-center text-sm text-gray-500 mt-6">
           Don't have an account?{" "}
-          <Link href="/signup" className="text-blue-500 hover:underline">
+          <Link href="https://forms.gle/r2eGpXunEt9jKCkt9" className="text-blue-500 hover:underline">
             Sign up here
           </Link>
         </p>
