@@ -26,6 +26,7 @@ export default function PatientSignup() {
   const [loading, setLoading] = useState(false);
   const [fetchingLocation, setFetchingLocation] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [consent, setConsent] = useState(false);
   const [formData, setFormData] = useState<SignupForm>({
     first_name: "",
     last_name: "",
@@ -85,7 +86,7 @@ export default function PatientSignup() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, consent }),
       });
 
       const data = await res.json();
@@ -293,6 +294,24 @@ export default function PatientSignup() {
               </div>
             </div>
 
+            <label className="flex items-start gap-3 rounded-2xl bg-[#f7f5f2] p-4 text-sm text-[#5f5b56]">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                required
+                className="mt-1 h-4 w-4 shrink-0"
+              />
+              <span>
+                I have read the{" "}
+                <Link href="/privacy" target="_blank" className="font-medium text-black underline underline-offset-4">
+                  Privacy Policy
+                </Link>{" "}
+                and agree that MediConnect shares my details and appointment information only with the doctors and
+                hospitals I book.
+              </span>
+            </label>
+
             <div className="flex flex-col items-start justify-between gap-4 border-t border-[#ece8e3] pt-6 sm:flex-row sm:items-center">
               <p className="text-sm text-[#5f5b56]">
                 Already have an account?{" "}
@@ -306,7 +325,7 @@ export default function PatientSignup() {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !consent}
                 className="inline-flex min-w-260px items-center justify-center gap-3 rounded-2xl bg-black px-8 py-4 text-base font-medium text-white shadow-[0_16px_30px_rgba(0,0,0,0.18)] transition hover:bg-[#161616] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}

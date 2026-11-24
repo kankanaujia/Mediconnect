@@ -1,4 +1,6 @@
 "use client";
+
+import Image from "next/image";
 //import { useSpring } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
@@ -28,10 +30,12 @@ export default function QuoteSection() {
         className={`absolute inset-0 transition-transform duration-1200ms ease-out
         ${visible ? "scale-110" : "scale-100"}`}
       >
-        <img
-          src="images/quote_bg.jpg"
+        <Image
+          src="/images/quote_bg.jpg"
           alt="Hospital"
-          className="w-full h-full object-cover"
+          fill
+          sizes="100vw"
+          className="object-cover"
         />
       </div>
 
@@ -40,13 +44,13 @@ export default function QuoteSection() {
 
       {/* Quote Box */}
       <div
-        className={`relative max-w-3xl mx-auto bg-white/90 backdrop-blur-md rounded-3xl p-12 text-center shadow-xl transition-all duration-700
+        className={`relative max-w-3xl mx-4 md:mx-auto bg-white/90 backdrop-blur-md rounded-3xl p-6 md:p-12 text-center shadow-xl transition-all duration-700
         ${visible ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-10 scale-95"}`}
       >
-        <p className="text-2xl md:text-3xl font-serif font-semibold text-gray-800 leading-relaxed">
-          "Medicine is not only a science; it is also an art. It does not consist
+        <p className="text-xl md:text-3xl font-serif font-semibold text-gray-800 leading-relaxed">
+          &ldquo;Medicine is not only a science; it is also an art. It does not consist
           of compounding pills and plasters; it deals with the very processes of
-          life."
+          life.&rdquo;
         </p>
 
         {/* Underline Accent */}

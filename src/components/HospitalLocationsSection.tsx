@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
 
 type Hospital = {
   id: string;
@@ -19,9 +18,9 @@ export default function HospitalLocationsSection() {
   // 🔥 FETCH FROM SUPABASE
   useEffect(() => {
     const fetchHospitals = async () => {
-      const { data, error } = await supabase
-        .from("hospitals")
-        .select("*");
+      const res = await fetch("/api/hospitals");
+      const data = res.ok ? await res.json() : null;
+      const error = res.ok ? null : await res.text();
 
       if (error) {
         console.error("Error fetching hospitals:", error);
@@ -47,14 +46,14 @@ export default function HospitalLocationsSection() {
 
   return (
     <section className="bg-white py-20">
-      <div className="max-w-7xl mx-auto px-10">
+      <div className="max-w-7xl mx-auto px-5 md:px-10">
 
         {/* HEADER */}
         <div className="text-center mb-8">
           <p className="text-sm tracking-widest font-serif text-[#8fb4c9]">
             FIND US
           </p>
-          <h2 className="text-[48px] font-serif font-extrabold text-gray-800">
+          <h2 className="text-3xl md:text-[48px] font-serif font-extrabold text-gray-800">
             Hospital Locations
           </h2>
           <p className="text-gray-500 font-serif mt-2 max-w-2xl mx-auto">
@@ -63,10 +62,10 @@ export default function HospitalLocationsSection() {
         </div>
 
         {/* CONTENT */}
-        <div className="flex gap-8">
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8">
 
           {/* MAP */}
-          <div className="w-2/3 h-[420px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm relative">
+          <div className="w-full md:w-2/3 h-[300px] md:h-[420px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm relative">
 
             {selected && (
               <iframe
@@ -81,7 +80,7 @@ export default function HospitalLocationsSection() {
           </div>
 
           {/* LIST */}
-          <div className="w-1/3 max-h-[420px] overflow-y-auto pr-2 space-y-4">
+          <div className="w-full md:w-1/3 md:max-h-[420px] md:overflow-y-auto md:pr-2 space-y-4">
 
             {hospitals.map((hospital, index) => (
               <div

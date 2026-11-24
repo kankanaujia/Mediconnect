@@ -1,8 +1,13 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { parseBookingReason, serializeBookingReason } from "@/lib/bookingMeta";
+import { bookingFromRow, bookingColumns } from "@/lib/bookingMeta";
 import { sendNotificationsForBooking } from "@/lib/bookingNotifications";
+import { refundPayment } from "@/lib/razorpayServer";
+import { sendBookingConfirmedEmail } from "@/lib/bookingEmails";
+import { sendDoctorNewBookingAlert } from "@/lib/doctorAlerts";
+import { appBaseUrl } from "@/lib/email";
+import { forbidden, getSession, unauthorized } from "@/lib/session";
 
 function getRazorpayConfig() {
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -22,6 +27,11 @@ export async function POST(req: Request) {
       { error: "Configure RAZORPAY_KEY_SECRET." },
       { status: 500 }
     );
+  }
+
+  const session = await getSession();
+  if (!session) {
+    return unauthorized();
   }
 
   const {
@@ -46,14 +56,47 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
-  const parsed = parseBookingReason(booking.reason);
+  if (session.role !== "patient" || booking.patient_id !== session.id) {
+    return forbidden();
+  }
+
+  const parsed = bookingFromRow(booking);
   const expected = crypto
     .createHmac("sha256", config.keySecret)
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)
     .digest("hex");
 
-  if (expected !== razorpay_signature) {
+  // The signature only proves Razorpay issued this payment for this order;
+  // also make sure the order is the one created for this booking.
+  if (!parsed.meta.paymentOrderId || razorpay_order_id !== parsed.meta.paymentOrderId) {
+    return NextResponse.json({ error: "Payment does not match this booking" }, { status: 400 });
+  }
+
+  if (
+    typeof razorpay_signature !== "string" ||
+    expected.length !== razorpay_signature.length ||
+    !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpay_signature))
+  ) {
     return NextResponse.json({ error: "Payment verification failed" }, { status: 400 });
+  }
+
+  // The booking was cancelled while the patient was paying: give the money back.
+  if (parsed.meta.status !== "booked") {
+    try {
+      await refundPayment(razorpay_payment_id, parsed.meta.amount);
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "This booking was cancelled and the automatic refund failed. Please contact support with your payment ID.",
+        },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(
+      { error: "This booking was cancelled, so your payment has been refunded." },
+      { status: 409 }
+    );
   }
 
   const notificationResult = await sendNotificationsForBooking(booking);
@@ -61,7 +104,7 @@ export async function POST(req: Request) {
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("bookings")
     .update({
-      reason: serializeBookingReason(parsed.reason, {
+      ...bookingColumns(parsed.reason, {
         ...parsed.meta,
         paymentStatus: "paid",
         paymentOrderId: razorpay_order_id,
@@ -88,6 +131,11 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+
+  await Promise.all([
+    sendBookingConfirmedEmail(updated, appBaseUrl(req)).catch(() => null),
+    sendDoctorNewBookingAlert(updated, appBaseUrl(req)).catch(() => null),
+  ]);
 
   return NextResponse.json(
     {

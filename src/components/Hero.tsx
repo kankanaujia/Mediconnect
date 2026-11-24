@@ -13,13 +13,13 @@ export default function Hero() {
       />
 
       {/* White Curved Overlay */}
-      <div className="absolute left-0 top-0 h-full w-1/2 bg-white/80 backdrop-blur-sm rounded-r-[200px]" />
+      <div className="absolute left-0 top-0 h-full w-full md:w-1/2 bg-white/80 backdrop-blur-sm md:rounded-r-[200px]" />
 
       {/* Content */}
-      <div className="relative z-10 flex items-center h-full px-16">
+      <div className="relative z-10 flex items-center h-full px-6 md:px-16">
         {/* Left Text Section */}
         <div className="max-w-xl">
-          <h1 className="text-6xl font-serif text-gray-700 leading-tight">
+          <h1 className="text-4xl md:text-6xl font-serif text-gray-700 leading-tight">
             Healthcare, <br />
             Access <br />
             <span className="text-cyan-400">Simplified.</span>
@@ -38,7 +38,7 @@ export default function Hero() {
         </div>
 
         {/* Right Glass Card */}
-        <div className="absolute right-20 top-40 bg-white/70 backdrop-blur-lg p-6 rounded-2xl font-serif shadow-xl max-w-sm">
+        <div className="hidden md:block absolute right-20 top-40 bg-white/70 backdrop-blur-lg p-6 rounded-2xl font-serif shadow-xl max-w-sm">
           <p className="text-gray-700 text-sm">
             Our platform integrates with leading healthcare facilities to
             provide you with seamless access to quality medical care.

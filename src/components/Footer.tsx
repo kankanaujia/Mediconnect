@@ -1,11 +1,13 @@
 "use client";
+
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Phone, Mail, MapPin } from "lucide-react";
 
 export default function Footer() {
   const router = useRouter();
   return (
-    <footer className="relative bg-linear-to-b from-gray-900 to-gray-800 pt-20 px-10">
+    <footer className="relative bg-linear-to-b from-gray-900 to-gray-800 pt-14 md:pt-20 px-5 md:px-10">
       
       {/* Overlay blur for glass feel */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent)] pointer-events-none" />
@@ -33,25 +35,21 @@ export default function Footer() {
             Quick Links
           </h3>
           <ul className="space-y-2 text-gray-300 text-sm font-serif">
-             <button
-              onClick={() => router.push("/")}
-              className="mt-1 border-b font-serif border-gray-800 pb- text-sm flex items-center hover:text-black transition cursor-pointer"
-            >
-            <li className="hover:text-white cursor-pointer transition">Home</li>
-            </button>
-            <button
-              onClick={() => router.push("/Hospitals")}
-              className="mt-1 border-b font-serif border-gray-800 pb- text-sm flex items-center hover:text-black transition cursor-pointer"
-            >
-            <li className="hover:text-white cursor-pointer transition">Hospitals</li>
-            </button>
-            <button
-              onClick={() => router.push("/Doctors")}
-              className="mt-1 border-b font-serif border-gray-800 pb- text-sm flex items-center hover:text-black transition cursor-pointer"
-            >
-            <li className="hover:text-white cursor-pointer transition">Find Doctors</li>
-            </button>
-            
+            {[
+              { label: "Home", href: "/" },
+              { label: "Hospitals", href: "/Hospitals" },
+              { label: "Find Doctors", href: "/Doctors" },
+              { label: "Doctor Sign Up", href: "/Doctor_signup" },
+              { label: "For Hospitals", href: "/hospital/login" },
+              { label: "Privacy Policy", href: "/privacy" },
+              { label: "Admin", href: "/admin/login" },
+            ].map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className="transition hover:text-white">
+                  {link.label}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
 

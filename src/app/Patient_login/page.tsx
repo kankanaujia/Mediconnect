@@ -23,30 +23,14 @@ export default function PatientLoginPage() {
     const cleanEmail = email.trim();
     const cleanPassword = password.trim();
 
-    if (cleanEmail === "patient@demo.com" && cleanPassword === "demo123") {
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          id: "demo-patient",
-          first_name: "Demo",
-          last_name: "Patient",
-          name: "Demo Patient",
-          email: cleanEmail,
-          phone: "",
-          location: "",
-          address: "",
-          gender: "",
-          date_of_birth: "",
-        })
-      );
-      router.push("/patient-dashboard");
-      return;
-    }
-
-    const res = await fetch(`/api/patients?email=${encodeURIComponent(cleanEmail)}`);
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "patient", email: cleanEmail, password: cleanPassword }),
+    });
     const data = await res.json();
 
-    if (!res.ok || !data || data.password !== cleanPassword) {
+    if (!res.ok) {
       alert(data.error || "Invalid credentials");
       return;
     }
@@ -85,7 +69,15 @@ export default function PatientLoginPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm text-gray-600">Password</label>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="block text-sm text-gray-600">Password</label>
+              <Link
+                href="/forgot-password?role=patient"
+                className="text-sm text-blue-500 hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
             <div className="flex items-center rounded-lg border border-gray-300 bg-white px-4 py-3">
               <input

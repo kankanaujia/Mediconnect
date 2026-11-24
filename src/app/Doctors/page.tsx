@@ -1,258 +1,201 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- doctor photos are external URLs entered by doctors, so plain <img> is used */
 
-import { useEffect, useState } from "react";
-import Footer from "@/components/Footer";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import { RatingSummary } from "@/components/StarRating";
 
 type Doctor = {
   id: string;
   name: string;
   specialization: string;
+  image_url: string | null;
+  hospital_id: string;
   hospital_name: string;
-  email?: string;
-  image_url?: string;
+  experience_years: number | null;
+  consultation_fee: number | null;
+  rating: number | null;
+  review_count: number;
 };
 
-type Hospital = {
-  id: string;
-  name: string;
-};
+type Hospital = { id: string; name: string };
 
 export default function DoctorsPage() {
-  const [hospital, setHospital] = useState("");
-  const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [search, setSearch] = useState("");
+  const [hospital, setHospital] = useState("");
+  const [specialization, setSpecialization] = useState("");
+  const [sort, setSort] = useState("name");
 
   useEffect(() => {
-    const fetchHospitals = async () => {
-      const { data } = await supabase.from("hospitals").select("id, name");
-      setHospitals(data || []);
-    };
+    let cancelled = false;
 
-    fetchHospitals();
+    void Promise.all([
+      fetch("/api/doctors").then((r) => r.json()),
+      fetch("/api/hospitals").then((res) => res.json()).then((data) => ({ data: Array.isArray(data) ? data : [] })),
+    ]).then(([doctorData, hospitalResult]) => {
+      if (cancelled) return;
+      setDoctors(Array.isArray(doctorData) ? doctorData : []);
+      setHospitals((hospitalResult.data as Hospital[]) ?? []);
+      setLoaded(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    if (!hospital) return;
+  const specializations = useMemo(
+    () => [...new Set(doctors.map((d) => d.specialization))].sort(),
+    [doctors]
+  );
 
-    const fetchDoctors = async () => {
-      const { data } = await supabase
-        .from("doctors")
-        .select("id, name, specialization, image_url, hospitals(name)")
-        .eq("hospital_id", hospital);
+  const visible = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const list = doctors.filter(
+      (d) =>
+        (!hospital || d.hospital_id === hospital) &&
+        (!specialization || d.specialization === specialization) &&
+        (!term ||
+          [d.name, d.specialization, d.hospital_name].some((f) => f.toLowerCase().includes(term)))
+    );
 
-      const formatted =
-        data?.map((d: any) => ({
-          id: d.id,
-          name: d.name,
-          specialization: d.specialization,
-          hospital_name: d.hospitals?.name,
-          image_url: d.image_url,
-        })) || [];
+    if (sort === "rating") {
+      return [...list].sort(
+        (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || b.review_count - a.review_count
+      );
+    }
+    if (sort === "experience") {
+      return [...list].sort((a, b) => (b.experience_years ?? -1) - (a.experience_years ?? -1));
+    }
+    return list;
+  }, [doctors, hospital, specialization, search, sort]);
 
-      setDoctors(formatted);
-    };
-
-    fetchDoctors();
-  }, [hospital]);
+  const hasFilters = Boolean(search || hospital || specialization);
 
   return (
     <div className="bg-white">
-      {/* HERO */}
-      <section className="w-full bg-gradient-to-r from-[#dfe8ee] via-[#d6e3ea] to-[#cfdde6] py-36 pt-48 text-center">
-        <h1 className="text-[64px] font-serif font-extrabold text-gray-800">
+      <section className="w-full bg-gradient-to-r from-[#dfe8ee] via-[#d6e3ea] to-[#cfdde6] px-5 pb-16 pt-28 md:py-36 md:pt-48 text-center">
+        <h1 className="text-4xl md:text-[64px] font-serif font-extrabold text-gray-800">
           Find Your Medical <span className="text-[#80c8f6]">Specialist</span>
         </h1>
-        <p className="mt-6 text-gray-500 font-serif text-lg max-w-3xl mx-auto leading-relaxed">
-          Browse our extensive network of healthcare professionals across various
-          specialties.
+        <p className="mt-6 text-gray-500 font-serif text-base md:text-lg max-w-3xl mx-auto leading-relaxed">
+          Browse our extensive network of healthcare professionals across various specialties.
         </p>
       </section>
 
-      {/* HOSPITAL FILTER */}
-      <section className="px-10 py-10 max-w-4xl mx-auto">
-        <select
-          value={hospital}
-          onChange={(e) => setHospital(e.target.value)}
-          className="border p-4 rounded-lg w-full text-gray-600"
-        >
-          <option value="">Select Hospital</option>
-          {hospitals.map((h) => (
-            <option key={h.id} value={h.id}>
-              {h.name}
-            </option>
-          ))}
-        </select>
+      <section className="mx-auto max-w-6xl px-5 md:px-6 py-10">
+        <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_1fr]">
+          <label className="flex min-w-0 items-center gap-2 rounded-lg border px-4 py-3 text-gray-600">
+            <Search className="h-4 w-4 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by doctor, specialty or hospital"
+              className="w-full min-w-0 outline-none"
+            />
+          </label>
+          <select
+            value={specialization}
+            onChange={(e) => setSpecialization(e.target.value)}
+            className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
+          >
+            <option value="">All specialties</option>
+            {specializations.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <select
+            value={hospital}
+            onChange={(e) => setHospital(e.target.value)}
+            className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
+          >
+            <option value="">All hospitals</option>
+            {hospitals.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
+          >
+            <option value="name">Sort: Name</option>
+            <option value="rating">Sort: Top rated</option>
+            <option value="experience">Sort: Most experienced</option>
+          </select>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
+          <span>
+            {loaded ? `${visible.length} doctor${visible.length === 1 ? "" : "s"} found` : "Loading doctors..."}
+          </span>
+          {hasFilters ? (
+            <button
+              onClick={() => {
+                setSearch("");
+                setHospital("");
+                setSpecialization("");
+              }}
+              className="text-blue-500 hover:underline"
+            >
+              Clear filters
+            </button>
+          ) : null}
+        </div>
       </section>
 
-      {/* DEFAULT STATIC GRID */}
-      {!hospital && (
-        <section className="px-10 pb-16">
-          <h3 className="text-2xl font-serif mb-8 text-gray-600">
-            Our Prestigious Specialists
-          </h3>
+      <section className="mx-auto max-w-6xl px-5 md:px-6 pb-16">
+        {loaded && visible.length === 0 ? (
+          <p className="rounded-xl border p-8 text-center text-gray-500">
+            No doctors match your search. Try a different specialty or hospital.
+          </p>
+        ) : null}
 
-          <div className="grid md:grid-cols-3 gap-10">
-            {[
-              {
-                name: "Dr. Kanishka Kanaujia",
-                spec: "Neurology",
-                image: "/images/Doctors/doc1.jpeg",
-              },
-              {
-                name: "Dr. Dhruv Gupta",
-                spec: "Neurology",
-                image: "/images/Doctors/doc2.jpeg",
-              },
-              {
-                name: "Dr. Elisha",
-                spec: "Neurology",
-                image: "/images/Doctors/doc3.jpeg",
-              },
-              {
-                name: "Dr. Harshita",
-                spec: "Orthopedics",
-                image: "/images/Doctors/doc4.jpeg",
-              },
-              {
-                name: "Dr. Namya Jain",
-                spec: "Gastroenterology",
-                image: "/images/Doctors/doc5.jpeg",
-              },
-              {
-                name: "Dr. Chenika",
-                spec: "Psychology",
-                image: "/images/Doctors/Doc6.jpeg",
-              },
-            ].map((doc, i) => (
-              <div key={i} className="border p-6 rounded-xl">
-                
-                {/* ✅ IMAGE SUPPORT ADDED */}
-                <div className="h-96 bg-gray-200 mb-4 overflow-hidden rounded-lg">
-                  {doc.image ? (
-                    <img
-                      src={doc.image}
-                      alt={doc.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl">
-                      D
-                    </div>
-                  )}
-                </div>
-
-                <h4 className="font-semibold text-gray-600">{doc.name}</h4>
-                <p className="text-sm text-gray-500">{doc.spec}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* DOCTORS GRID */}
-      {hospital && (
-        <section className="px-10 pb-16">
-          <div className="grid md:grid-cols-3 gap-10">
-            {doctors.length === 0 ? (
-              <p className="text-gray-600">No doctors available</p>
-            ) : (
-              doctors.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="border p-6 rounded-xl hover:shadow-lg transition text-gray-600"
-                >
-                  <div className="h-96 bg-gray-200 mb-4 overflow-hidden rounded-lg">
-                    {doc.image_url ? (
-                      <img
-                        src={doc.image_url}
-                        alt={doc.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl">
-                        D
-                      </div>
-                    )}
-                  </div>
-
-                  <h3 className="text-xl font-serif font-semibold">
-                    {doc.name}
-                  </h3>
-
-                  <p className="text-gray-500 mt-2">
-                    {doc.specialization}
-                  </p>
-
-                  <button
-                    onClick={() => setSelectedDoctor(doc)}
-                    className="mt-4 text-sm underline"
-                  >
-                    VIEW PROFILE →
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* MODAL */}
-      {selectedDoctor && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 text-gray-600">
-          <div className="bg-white w-[90%] max-w-4xl p-8 rounded-xl relative">
-            <button
-              onClick={() => setSelectedDoctor(null)}
-              className="absolute top-4 right-4 text-xl"
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((doc) => (
+            <Link
+              key={doc.id}
+              href={`/Doctors/${doc.id}`}
+              className="group rounded-xl border p-5 text-gray-600 transition hover:shadow-lg"
             >
-              ✕
-            </button>
-
-            <div className="grid md:grid-cols-2 gap-8">
-              <div className="h-96 bg-gray-200 overflow-hidden rounded-lg">
-                {selectedDoctor.image_url ? (
+              <div className="mb-4 h-72 overflow-hidden rounded-lg bg-gray-100">
+                {doc.image_url ? (
                   <img
-                    src={selectedDoctor.image_url}
-                    alt={selectedDoctor.name}
-                    className="w-full h-full object-cover"
+                    src={doc.image_url}
+                    alt={doc.name}
+                    className="h-full w-full object-cover transition group-hover:scale-105"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-5xl">
-                    D
+                  <div className="flex h-full w-full items-center justify-center font-serif text-5xl text-gray-400">
+                    {doc.name.replace(/^Dr\.?\s*/, "").charAt(0)}
                   </div>
                 )}
               </div>
-
-              <div>
-                <h2 className="text-3xl font-serif font-bold">
-                  {selectedDoctor.name}
-                </h2>
-
-                <p className="text-gray-500 mt-2">
-                  {selectedDoctor.specialization}
-                </p>
-
-                <p className="mt-4 text-sm text-gray-600">
-                  Hospital: {selectedDoctor.hospital_name}
-                </p>
-
-                <div className="mt-6 space-y-2">
-                  <p>📞 +91-XXXXXXXXXX</p>
-                  <p>📧 {selectedDoctor.email || "demo@email.com"}</p>
-                </div>
+              <h3 className="font-serif text-xl font-semibold text-gray-800">{doc.name}</h3>
+              <p className="mt-1 text-gray-500">
+                {doc.specialization} • {doc.hospital_name}
+              </p>
+              <div className="mt-2">
+                <RatingSummary rating={doc.rating} count={doc.review_count} />
               </div>
-            </div>
-          </div>
+              <div className="mt-3 flex items-center justify-between text-sm">
+                <span>
+                  {doc.experience_years !== null ? `${doc.experience_years} yrs experience` : ""}
+                </span>
+                <span className="font-medium underline">VIEW PROFILE →</span>
+              </div>
+            </Link>
+          ))}
         </div>
-      )}
-
-      
+      </section>
     </div>
   );
 }

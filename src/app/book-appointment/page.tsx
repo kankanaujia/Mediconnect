@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import {
   generateSpecialAppointmentTimes,
   type ScheduleEntry,
@@ -20,15 +19,45 @@ type Doctor = {
   name: string;
   specialization: string;
   hospital_id: string;
+  consultation_fee: number | null;
 };
+
+// Must match src/lib/paymentConfig.ts (prices shown before checkout).
+const DEFAULT_SPECIAL_FEE = 700;
 
 type Booking = {
   appointment_date: string;
   appointment_time: string;
   meta: {
-    status: "booked" | "completed";
+    status: "booked" | "completed" | "cancelled";
   };
 };
+
+async function fetchSpecialAvailability(doctorId: string, date: string) {
+  const [scheduleRes, bookingsRes] = await Promise.all([
+    fetch(`/api/schedules?doctor_id=${doctorId}`),
+    fetch(`/api/bookings?doctor_id=${doctorId}`),
+  ]);
+
+  const [scheduleData, bookingsData] = await Promise.all([
+    scheduleRes.json(),
+    bookingsRes.json(),
+  ]);
+
+  const schedules = Array.isArray(scheduleData) ? (scheduleData as ScheduleEntry[]) : [];
+  const activeBookings = Array.isArray(bookingsData)
+    ? (bookingsData as Booking[]).filter((booking) => booking.meta.status === "booked")
+    : [];
+
+  const blockedTimes = activeBookings
+    .filter((booking) => booking.appointment_date === date)
+    .map((booking) => booking.appointment_time.slice(0, 5));
+
+  return {
+    schedules,
+    times: generateSpecialAppointmentTimes(schedules, date, blockedTimes),
+  };
+}
 
 export default function BookAppointment() {
   const router = useRouter();
@@ -42,7 +71,6 @@ export default function BookAppointment() {
   } | null>(null);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [scheduleEntries, setScheduleEntries] = useState<ScheduleEntry[]>([]);
   const [selectedHospitalId, setSelectedHospitalId] = useState("");
   const [selectedSpecialization, setSelectedSpecialization] = useState("");
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
@@ -50,8 +78,13 @@ export default function BookAppointment() {
   const [selectedTime, setSelectedTime] = useState("");
   const [reason, setReason] = useState("");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
-  const [loadingTimes, setLoadingTimes] = useState(false);
+  // Which doctor+date the current availableTimes were loaded for.
+  const [loadedAvailabilityKey, setLoadedAvailabilityKey] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const availabilityKey =
+    selectedDoctorId && selectedDate ? `${selectedDoctorId}|${selectedDate}` : "";
+  const loadingTimes = availabilityKey !== "" && loadedAvailabilityKey !== availabilityKey;
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -60,22 +93,11 @@ export default function BookAppointment() {
       return;
     }
 
+    // Restoring the saved login from localStorage on mount is a one-off sync
+    // from an external store, which is what this effect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(JSON.parse(storedUser));
   }, [router]);
-
-  useEffect(() => {
-    void loadBaseData();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedDoctorId || !selectedDate) {
-      setAvailableTimes([]);
-      setSelectedTime("");
-      return;
-    }
-
-    void loadSpecialAvailability(selectedDoctorId, selectedDate);
-  }, [selectedDoctorId, selectedDate]);
 
   const filteredDoctors = useMemo(() => {
     return doctors.filter((doctor) => {
@@ -100,48 +122,49 @@ export default function BookAppointment() {
 
   const selectedDoctor = filteredDoctors.find((doctor) => doctor.id === selectedDoctorId);
 
-  const loadBaseData = async () => {
-    const [hospitalResult, doctorResult] = await Promise.all([
-      supabase.from("hospitals").select("id, name, location").order("name"),
-      supabase
-        .from("doctors")
-        .select("id, name, specialization, hospital_id")
-        .eq("approved", true)
-        .order("name"),
-    ]);
+  useEffect(() => {
+    let cancelled = false;
 
-    setHospitals((hospitalResult.data as Hospital[]) ?? []);
-    setDoctors((doctorResult.data as Doctor[]) ?? []);
-  };
+    void Promise.all([
+      fetch("/api/hospitals").then((res) => res.json()).then((data) => ({ data: Array.isArray(data) ? data : [] })),
+      fetch("/api/doctors").then((res) => res.json()),
+    ]).then(([hospitalResult, doctorData]) => {
+      if (cancelled) return;
+      const loadedDoctors = Array.isArray(doctorData) ? (doctorData as Doctor[]) : [];
+      setHospitals((hospitalResult.data as Hospital[]) ?? []);
+      setDoctors(loadedDoctors);
 
-  const loadSpecialAvailability = async (doctorId: string, date: string) => {
-    setLoadingTimes(true);
+      // Opened from a doctor's profile: /book-appointment?doctor=<id>
+      const requested = new URLSearchParams(window.location.search).get("doctor");
+      const match = loadedDoctors.find((doctor) => doctor.id === requested);
+      if (match) {
+        setSelectedHospitalId(match.hospital_id);
+        setSelectedSpecialization(match.specialization);
+        setSelectedDoctorId(match.id);
+      }
+    });
 
-    const [scheduleRes, bookingsRes] = await Promise.all([
-      fetch(`/api/schedules?doctor_id=${doctorId}`),
-      fetch(`/api/bookings?doctor_id=${doctorId}`),
-    ]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    const [scheduleData, bookingsData] = await Promise.all([
-      scheduleRes.json(),
-      bookingsRes.json(),
-    ]);
+  useEffect(() => {
+    if (!availabilityKey) return;
+    let cancelled = false;
 
-    const nextSchedules = Array.isArray(scheduleData)
-      ? (scheduleData as ScheduleEntry[])
-      : [];
-    const activeBookings = Array.isArray(bookingsData)
-      ? (bookingsData as Booking[]).filter((booking) => booking.meta.status !== "completed")
-      : [];
+    fetchSpecialAvailability(selectedDoctorId, selectedDate)
+      .catch(() => ({ schedules: [] as ScheduleEntry[], times: [] as string[] }))
+      .then(({ times }) => {
+        if (cancelled) return;
+        setAvailableTimes(times);
+        setLoadedAvailabilityKey(availabilityKey);
+      });
 
-    const blockedTimes = activeBookings
-      .filter((booking) => booking.appointment_date === date)
-      .map((booking) => booking.appointment_time.slice(0, 5));
-
-    setScheduleEntries(nextSchedules);
-    setAvailableTimes(generateSpecialAppointmentTimes(nextSchedules, date, blockedTimes));
-    setLoadingTimes(false);
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [availabilityKey, selectedDoctorId, selectedDate]);
 
   const handleConfirm = async () => {
     if (!user?.id || !selectedDoctor || !selectedDate || !selectedTime) {
@@ -201,7 +224,7 @@ export default function BookAppointment() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f9fafb] px-6 pb-20 pt-28 lg:px-24">
+    <div className="min-h-screen bg-[#f9fafb] px-4 pb-20 pt-24 sm:px-6 md:pt-28 lg:px-24">
       <button
         onClick={() => router.push("/patient-dashboard")}
         className="mb-6 text-sm text-blue-500"
@@ -210,7 +233,7 @@ export default function BookAppointment() {
       </button>
 
       <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-[28px] bg-white p-6 shadow-sm sm:p-8">
+        <section className="min-w-0 rounded-[28px] bg-white p-5 shadow-sm sm:p-8">
           <h1 className="font-serif text-4xl font-semibold text-gray-900">
             Special Appointment
           </h1>
@@ -228,8 +251,9 @@ export default function BookAppointment() {
                 setSelectedSpecialization("");
                 setSelectedDoctorId("");
                 setSelectedTime("");
+                setAvailableTimes([]);
               }}
-              className="rounded-2xl border border-gray-200 p-2 text-gray-800"
+              className="w-full min-w-0 rounded-2xl border border-gray-200 p-2 text-gray-800"
             >
               <option value="">Select Hospital</option>
               {hospitals.map((hospital) => (
@@ -245,8 +269,9 @@ export default function BookAppointment() {
                 setSelectedSpecialization(e.target.value);
                 setSelectedDoctorId("");
                 setSelectedTime("");
+                setAvailableTimes([]);
               }}
-              className="rounded-2xl border border-gray-200 p-4 text-gray-800"
+              className="w-full min-w-0 rounded-2xl border border-gray-200 p-4 text-gray-800"
             >
               <option value="">Select Specialist</option>
               {specializations.map((specialization) => (
@@ -261,8 +286,9 @@ export default function BookAppointment() {
               onChange={(e) => {
                 setSelectedDoctorId(e.target.value);
                 setSelectedTime("");
+                setAvailableTimes([]);
               }}
-              className="rounded-2xl border border-gray-200 p-4"
+              className="w-full min-w-0 rounded-2xl border border-gray-200 p-4"
             >
               <option value="">Select Doctor</option>
               {filteredDoctors.map((doctor) => (
@@ -278,8 +304,9 @@ export default function BookAppointment() {
               onChange={(e) => {
                 setSelectedDate(e.target.value);
                 setSelectedTime("");
+                setAvailableTimes([]);
               }}
-              className="rounded-2xl border text-gray-800 border-gray-200 p-4"
+              className="w-full min-w-0 rounded-2xl border text-gray-800 border-gray-200 p-4"
             />
           </div>
 
@@ -322,7 +349,7 @@ export default function BookAppointment() {
           </div>
         </section>
 
-        <aside className="rounded-[28px] bg-[#111111] p-6 text-white shadow-sm sm:p-8">
+        <aside className="min-w-0 rounded-[28px] bg-[#111111] p-5 text-white shadow-sm sm:p-8">
           <h2 className="font-serif text-3xl font-semibold">Booking Summary</h2>
           <div className="mt-6 space-y-4 text-sm text-white/80">
             <p>
@@ -351,8 +378,12 @@ export default function BookAppointment() {
               Time: <span className="text-white">{selectedTime || "Not selected"}</span>
             </p>
             <p>
-              Schedule items loaded:{" "}
-              <span className="text-white">{scheduleEntries.length}</span>
+              Fee:{" "}
+              <span className="text-white">
+                {selectedDoctor
+                  ? `₹${selectedDoctor.consultation_fee && selectedDoctor.consultation_fee > 0 ? selectedDoctor.consultation_fee : DEFAULT_SPECIAL_FEE}`
+                  : "Select a doctor"}
+              </span>
             </p>
           </div>
 

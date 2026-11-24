@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState, type FormEvent } from "react";
 
 export default function DoctorLoginPage() {
   const router = useRouter();
@@ -13,55 +12,22 @@ export default function DoctorLoginPage() {
   const [loading, setLoading] = useState(false);
 
   // 🔐 LOGIN HANDLER
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
     const cleanEmail = email.trim();
     const cleanPassword = password.trim();
 
-    // ===========================
-    // 🟡 DEV MODE LOGIN (Toggle via .env.local)
-    // ===========================
-    const isDevLoginEnabled =
-  process.env.NEXT_PUBLIC_DEV_LOGIN === "true" || true;
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "doctor", email: cleanEmail, password: cleanPassword }),
+    });
+    const data = await res.json();
 
-if (
-  isDevLoginEnabled &&
-  cleanEmail === "doctor@demo.com" &&
-  cleanPassword === "demo123"
-) {
-  const demoDoctor = {
-    id: "demo-id",
-    name: "Demo Doctor",
-    email: cleanEmail,
-    specialization: "General",
-  };
-
-  localStorage.setItem("doctor", JSON.stringify(demoDoctor));
-  router.push("/doctor-dashboard");
-  return;
-}
-    // ===========================
-
-    // ===========================
-    // 🔵 REAL DB LOGIN (Supabase)
-    // ===========================
-    const { data, error } = await supabase
-      .from("doctors")
-      .select("*")
-      .eq("email", cleanEmail)
-      .eq("approved", true)
-      .single();
-
-    if (error || !data) {
-      alert("Invalid email");
-      setLoading(false);
-      return;
-    }
-
-    if (data.password !== cleanPassword) {
-      alert("Incorrect password");
+    if (!res.ok) {
+      alert(data.error || "Invalid email or password");
       setLoading(false);
       return;
     }
@@ -111,9 +77,15 @@ if (
 
           {/* PASSWORD */}
           <div>
-            <label className="block text-sm text-gray-600 mb-2">
-              Password
-            </label>
+            <div className="mb-2 flex items-center justify-between">
+              <label className="block text-sm text-gray-600">Password</label>
+              <Link
+                href="/forgot-password?role=doctor"
+                className="text-sm text-blue-500 hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
             <div className="flex items-center border border-gray-300 rounded-lg px-4 py-3 bg-white">
               <span className="text-gray-400 mr-3">🔒</span>
@@ -141,8 +113,8 @@ if (
 
         {/* SIGN UP */}
         <p className="text-center text-sm text-gray-500 mt-6">
-          Don't have an account?{" "}
-          <Link href="https://forms.gle/r2eGpXunEt9jKCkt9" className="text-blue-500 hover:underline">
+          Don&apos;t have an account?{" "}
+          <Link href="/Doctor_signup" className="text-blue-500 hover:underline">
             Sign up here
           </Link>
         </p>

@@ -4,7 +4,7 @@ export default function Specialties() {
   const data = [
     {
       title: "Cardiology",
-      image: "images/cardiology.jpg",
+      image: "/images/cardiology.jpg",
       icon: "❤️",
       gradient: "bg-gradient-to-r from-red-300/70 to-red-200/40",
       quote: "Heart health tips",
@@ -17,7 +17,7 @@ export default function Specialties() {
     },
     {
       title: "Neurology",
-      image: "images/neurology.webp",
+      image: "/images/neurology.webp",
       icon: "🧠",
       gradient: "bg-gradient-to-r from-purple-300/70 to-indigo-200/40",
       quote: "Brain health tips",
@@ -30,7 +30,7 @@ export default function Specialties() {
     },
     {
       title: "General Medicine",
-      image: "images/gen_medicine.jpg",
+      image: "/images/gen_medicine.jpg",
       icon: "🩺",
       gradient: "bg-gradient-to-r from-blue-300/70 to-cyan-200/40",
       quote: "Wellness tips",
@@ -44,13 +44,13 @@ export default function Specialties() {
   ];
 
   return (
-    <section className="px-10 py-20 bg-gray-50">
+    <section className="px-5 md:px-10 py-14 md:py-20 bg-gray-50">
       {/* Heading */}
       <div className="mb-12">
         <p className="text-sm font-serif tracking-widest text-gray-400 uppercase">
           Medical Specialties
         </p>
-        <h2 className="text-5xl font-serif font-bold text-gray-800 mt-2">
+        <h2 className="text-3xl md:text-5xl font-serif font-bold text-gray-800 mt-2">
           Explore Our Specializations
         </h2>
       </div>
