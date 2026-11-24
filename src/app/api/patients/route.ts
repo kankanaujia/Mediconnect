@@ -1,58 +1,27 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import {
-  parsePatientAddress,
   serializePatientAddress,
+  shapePatient,
+  type PatientRow,
 } from "@/lib/patientProfile";
+import { hashPassword } from "@/lib/password";
+import { MIN_PASSWORD_LENGTH } from "@/lib/accounts";
+import { getSession, setSessionCookie, unauthorized } from "@/lib/session";
 
-type PatientRow = {
-  id: string;
-  name: string;
-  email: string;
-  password: string;
-  phone: string;
-  address: string;
-};
-
-function shapePatient(row: PatientRow) {
-  const profile = parsePatientAddress(row.address);
-  const nameParts = row.name.split(" ");
-
-  return {
-    id: row.id,
-    name: row.name,
-    first_name: nameParts[0] ?? "",
-    last_name: nameParts.slice(1).join(" "),
-    email: row.email,
-    password: row.password,
-    phone: row.phone,
-    address: profile.address,
-    location: profile.location,
-    gender: profile.gender,
-    date_of_birth: profile.date_of_birth,
-  };
-}
-
-export async function GET(req: Request) {
+// Returns the logged-in patient's own profile.
+export async function GET() {
   try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
-    const email = searchParams.get("email");
-
-    let query = supabaseAdmin.from("patients").select("*");
-
-    if (id) {
-      query = query.eq("id", id);
-    } else if (email) {
-      query = query.eq("email", email);
-    } else {
-      return NextResponse.json(
-        { error: "Patient id or email is required" },
-        { status: 400 }
-      );
+    const session = await getSession();
+    if (!session || session.role !== "patient") {
+      return unauthorized();
     }
 
-    const { data, error } = await query.single();
+    const { data, error } = await supabaseAdmin
+      .from("patients")
+      .select("*")
+      .eq("id", session.id)
+      .single();
 
     if (error || !data) {
       return NextResponse.json({ error: "Patient not found" }, { status: 404 });
@@ -64,6 +33,7 @@ export async function GET(req: Request) {
   }
 }
 
+// Sign-up: creates the patient with a hashed password and logs them in.
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -79,8 +49,31 @@ export async function POST(req: Request) {
       address,
     } = body;
 
+    const cleanEmail = typeof email === "string" ? email.trim() : "";
+    const cleanPassword = typeof password === "string" ? password.trim() : "";
+
+    if (!cleanEmail || cleanPassword.length < MIN_PASSWORD_LENGTH) {
+      return NextResponse.json(
+        { error: `A valid email and a password of at least ${MIN_PASSWORD_LENGTH} characters are required` },
+        { status: 400 }
+      );
+    }
+
+    const { data: existing } = await supabaseAdmin
+      .from("patients")
+      .select("id")
+      .eq("email", cleanEmail)
+      .maybeSingle();
+
+    if (existing) {
+      return NextResponse.json(
+        { error: "An account with this email already exists" },
+        { status: 409 }
+      );
+    }
+
     const name = [first_name, last_name].filter(Boolean).join(" ").trim();
-    const serializedAddress = serializePatientAddress(address, {
+    const serializedAddress = serializePatientAddress(address ?? "", {
       location,
       gender,
       date_of_birth,
@@ -91,8 +84,8 @@ export async function POST(req: Request) {
       .insert([
         {
           name,
-          email,
-          password,
+          email: cleanEmail,
+          password: hashPassword(cleanPassword),
           phone,
           address: serializedAddress,
         },
@@ -107,17 +100,26 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json(shapePatient(data as PatientRow), { status: 200 });
+    return setSessionCookie(
+      NextResponse.json(shapePatient(data as PatientRow), { status: 200 }),
+      "patient",
+      data.id
+    );
   } catch {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
 
+// Updates the logged-in patient's own profile.
 export async function PUT(req: Request) {
   try {
+    const session = await getSession();
+    if (!session || session.role !== "patient") {
+      return unauthorized();
+    }
+
     const body = await req.json();
     const {
-      id,
       first_name,
       last_name,
       date_of_birth,
@@ -128,15 +130,8 @@ export async function PUT(req: Request) {
       location,
     } = body;
 
-    if (!id) {
-      return NextResponse.json(
-        { error: "Patient id is required" },
-        { status: 400 }
-      );
-    }
-
     const name = [first_name, last_name].filter(Boolean).join(" ").trim();
-    const serializedAddress = serializePatientAddress(address, {
+    const serializedAddress = serializePatientAddress(address ?? "", {
       location,
       gender,
       date_of_birth,
@@ -150,7 +145,7 @@ export async function PUT(req: Request) {
         phone,
         address: serializedAddress,
       })
-      .eq("id", id)
+      .eq("id", session.id)
       .select("*")
       .single();
 

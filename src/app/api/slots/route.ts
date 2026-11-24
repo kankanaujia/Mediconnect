@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
+import { getSession, unauthorized } from "@/lib/session";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -21,13 +22,18 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const session = await getSession();
+  if (!session || session.role !== "doctor") {
+    return unauthorized("Please log in as a doctor.");
+  }
+
   const body = await req.json();
 
   const { data, error } = await supabaseAdmin
     .from("slots")
     .insert([
       {
-        doctor_id: body.doctor_id,
+        doctor_id: session.id,
         date: body.date,
         duration: body.duration,
         location: body.location,
@@ -52,6 +58,11 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const session = await getSession();
+  if (!session || session.role !== "doctor") {
+    return unauthorized("Please log in as a doctor.");
+  }
+
   const body = await req.json();
 
   const { data, error } = await supabaseAdmin
@@ -62,6 +73,7 @@ export async function PUT(req: Request) {
       location: body.location,
     })
     .eq("id", body.id)
+    .eq("doctor_id", session.id)
     .select("*")
     .single();
 
@@ -76,9 +88,18 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const session = await getSession();
+  if (!session || session.role !== "doctor") {
+    return unauthorized("Please log in as a doctor.");
+  }
+
   const { id } = await req.json();
 
-  const { error } = await supabaseAdmin.from("slots").delete().eq("id", id);
+  const { error } = await supabaseAdmin
+    .from("slots")
+    .delete()
+    .eq("id", id)
+    .eq("doctor_id", session.id);
 
   if (error) {
     return NextResponse.json(

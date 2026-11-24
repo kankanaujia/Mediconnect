@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { parseBookingReason } from "@/lib/bookingMeta";
+import { bookingFromRow } from "@/lib/bookingMeta";
 import { generateReceiptPdf } from "@/lib/receiptPdf";
+import { canAccessBooking, forbidden, getSession, unauthorized } from "@/lib/session";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getSession();
+  if (!session) {
+    return unauthorized();
+  }
+
   const { id } = await params;
 
   const { data: booking, error } = await supabaseAdmin
@@ -19,6 +25,10 @@ export async function GET(
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
+  if (!canAccessBooking(session, booking)) {
+    return forbidden();
+  }
+
   const [patientResult, doctorResult, hospitalResult] = await Promise.all([
     supabaseAdmin.from("patients").select("name").eq("id", booking.patient_id).single(),
     supabaseAdmin.from("doctors").select("name").eq("id", booking.doctor_id).single(),
@@ -29,7 +39,7 @@ export async function GET(
       .single(),
   ]);
 
-  const parsed = parseBookingReason(booking.reason);
+  const parsed = bookingFromRow(booking);
   const pdf = generateReceiptPdf({
     receiptId: parsed.meta.receiptId ?? `receipt-${id}`,
     patientName: patientResult.data?.name ?? "Patient",

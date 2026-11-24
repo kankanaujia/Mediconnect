@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { parseBookingReason, serializeBookingReason } from "@/lib/bookingMeta";
+import { bookingFromRow, bookingColumns } from "@/lib/bookingMeta";
 import { sendNotificationsForBooking } from "@/lib/bookingNotifications";
+import { forbidden, getSession, unauthorized } from "@/lib/session";
 
 export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getSession();
+  if (!session) {
+    return unauthorized();
+  }
+
   const { id } = await params;
 
   const { data: booking, error } = await supabaseAdmin
@@ -19,13 +25,17 @@ export async function POST(
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
-  const parsed = parseBookingReason(booking.reason);
+  if (session.role !== "patient" || booking.patient_id !== session.id) {
+    return forbidden();
+  }
+
+  const parsed = bookingFromRow(booking);
   const notificationResult = await sendNotificationsForBooking(booking);
 
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("bookings")
     .update({
-      reason: serializeBookingReason(parsed.reason, {
+      ...bookingColumns(parsed.reason, {
         ...parsed.meta,
         notifications: {
           confirmationSid: notificationResult.confirmation?.sid,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
+import { getSession, unauthorized } from "@/lib/session";
 import { parseScheduleEntry, type ScheduleEntry } from "@/lib/doctorSchedule";
 
 type IncomingSchedule = Partial<ScheduleEntry> & {
@@ -10,6 +11,11 @@ type IncomingSchedule = Partial<ScheduleEntry> & {
 };
 
 export async function POST(req: Request) {
+  const session = await getSession();
+  if (!session || session.role !== "doctor") {
+    return unauthorized("Please log in as a doctor.");
+  }
+
   const body = (await req.json()) as { schedules?: IncomingSchedule[] };
   const schedules = Array.isArray(body.schedules) ? body.schedules : [];
 
@@ -18,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   const rows = schedules.map((s) => ({
-    doctor_id: s.doctor_id,
+    doctor_id: session.id,
     day_of_week: Number(s.dayOfWeek),
     title: s.title ?? "Other",
     start_time: s.startTime ?? "09:00",
@@ -44,7 +50,7 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json(
-    (data as any[]).map((row) => parseScheduleEntry(row)).filter(Boolean),
+    (data as Parameters<typeof parseScheduleEntry>[0][]).map((row) => parseScheduleEntry(row)).filter(Boolean),
     { status: 200 },
   );
 }

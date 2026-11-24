@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { UserRound, X } from "lucide-react";
+import { StarInput, Stars } from "@/components/StarRating";
 import { supabase } from "@/lib/supabase";
 import { launchRazorpayCheckout } from "@/lib/razorpayClient";
 import {
@@ -62,11 +63,12 @@ type Booking = {
   doctor_name: string;
   specialization: string;
   hospital_name: string;
+  review?: { rating: number; comment: string | null } | null;
   meta: {
     kind: "daily" | "special";
-    status: "booked" | "completed";
+    status: "booked" | "completed" | "cancelled";
     slotId?: string;
-    paymentStatus?: "pending" | "paid" | "failed";
+    paymentStatus?: "pending" | "paid" | "failed" | "refunded";
     paymentOrderId?: string;
     paymentId?: string;
     receiptId?: string;
@@ -108,6 +110,11 @@ export default function PatientDashboard() {
   const [bookingSlot, setBookingSlot] = useState<string | null>(null);
   const [savingBookingEdit, setSavingBookingEdit] = useState(false);
   const [retryingNotification, setRetryingNotification] = useState<string | null>(null);
+  const [cancellingBooking, setCancellingBooking] = useState<string | null>(null);
+  const [reviewingBooking, setReviewingBooking] = useState<Booking | null>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -135,6 +142,7 @@ export default function PatientDashboard() {
   const router = useRouter();
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only render flag
     setMounted(true);
     const storedUser = localStorage.getItem("user");
 
@@ -169,16 +177,11 @@ export default function PatientDashboard() {
 
   useEffect(() => {
     if (!slotSelection.doctorId) {
-      setAvailableSlots([]);
       return;
     }
 
     void loadAvailableSlots(slotSelection.doctorId);
   }, [slotSelection.doctorId]);
-
-  useEffect(() => {
-    setSlotPickerDateFilter("all");
-  }, [slotSelection.doctorId, showSlotModal]);
 
   useEffect(() => {
     if (
@@ -204,7 +207,7 @@ export default function PatientDashboard() {
         ? (bookingsData as Booking[]).filter(
             (item) =>
               item.id !== editingBooking.id &&
-              item.meta.status !== "completed" &&
+              item.meta.status === "booked" &&
               item.appointment_date === editBookingForm.appointmentDate,
           )
         : [];
@@ -222,6 +225,41 @@ export default function PatientDashboard() {
       );
     })();
   }, [editingBooking, editBookingForm.appointmentDate]);
+
+  const upcomingBookings = bookings.filter((booking) => booking.meta.status === "booked");
+  const pastBookings = bookings.filter((booking) => booking.meta.status !== "booked");
+
+  const submitReview = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!reviewingBooking || reviewRating < 1) return;
+
+    setSavingReview(true);
+    const res = await fetch("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        booking_id: reviewingBooking.id,
+        rating: reviewRating,
+        comment: reviewComment,
+      }),
+    });
+    const data = await res.json();
+    setSavingReview(false);
+
+    if (!res.ok) {
+      alert(data.error || "Could not save your review");
+      return;
+    }
+
+    setBookings((prev) =>
+      prev.map((item) =>
+        item.id === reviewingBooking.id
+          ? { ...item, review: { rating: data.rating, comment: data.comment } }
+          : item,
+      ),
+    );
+    setReviewingBooking(null);
+  };
 
   const displayName =
     [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim() ||
@@ -267,17 +305,22 @@ export default function PatientDashboard() {
   }, [doctors, slotSelection.hospitalId]);
 
   const handleLogout = () => {
+    void fetch("/api/auth/logout", { method: "POST" });
     localStorage.removeItem("user");
     router.push("/Patient_login");
   };
 
-  const loadPatientBookings = async (patientId: string) => {
+  async function loadPatientBookings(patientId: string) {
     const res = await fetch(`/api/bookings?patient_id=${patientId}`);
+    if (res.status === 401) {
+      handleLogout();
+      return;
+    }
     const data = await res.json();
     setBookings(Array.isArray(data) ? data : []);
   };
 
-  const loadPickerData = async () => {
+  async function loadPickerData() {
     const [hospitalResult, doctorResult] = await Promise.all([
       supabase.from("hospitals").select("id, name, location").order("name"),
       supabase
@@ -291,7 +334,7 @@ export default function PatientDashboard() {
     setDoctors((doctorResult.data as Doctor[]) ?? []);
   };
 
-  const loadAvailableSlots = async (doctorId: string) => {
+  async function loadAvailableSlots(doctorId: string) {
     setLoadingSlots(true);
 
     const [slotsRes, bookingsRes] = await Promise.all([
@@ -306,7 +349,7 @@ export default function PatientDashboard() {
 
     const activeBookings = Array.isArray(bookingsData)
       ? (bookingsData as Booking[]).filter(
-          (booking) => booking.meta.status !== "completed",
+          (booking) => booking.meta.status === "booked",
         )
       : [];
 
@@ -419,6 +462,7 @@ export default function PatientDashboard() {
     setAvailableSlots((prev) => prev.filter((item) => item.id !== slot.id));
     setShowSlotModal(false);
     setSlotSelection(emptySlotSelection);
+    setAvailableSlots([]);
 
     try {
       await handlePayForBooking(data.id);
@@ -466,7 +510,7 @@ export default function PatientDashboard() {
       const activeBookings = Array.isArray(bookingsData)
         ? (bookingsData as Booking[]).filter(
             (item) =>
-              item.id !== booking.id && item.meta.status !== "completed",
+              item.id !== booking.id && item.meta.status === "booked",
           )
         : [];
 
@@ -513,7 +557,7 @@ export default function PatientDashboard() {
       ? (bookingsData as Booking[]).filter(
           (item) =>
             item.id !== booking.id &&
-            item.meta.status !== "completed" &&
+            item.meta.status === "booked" &&
             item.appointment_date === booking.appointment_date,
         )
       : [];
@@ -597,6 +641,47 @@ export default function PatientDashboard() {
     setEditAvailableTimes([]);
   };
 
+  const handleCancelBooking = async (booking: Booking) => {
+    const paid = booking.meta.paymentStatus === "paid";
+    const confirmed = window.confirm(
+      paid
+        ? "Cancel this appointment? Your payment will be refunded in full."
+        : "Cancel this appointment?",
+    );
+    if (!confirmed) return;
+
+    setCancellingBooking(booking.id);
+    const res = await fetch(`/api/bookings/${booking.id}/cancel`, { method: "POST" });
+    const data = await res.json();
+    setCancellingBooking(null);
+
+    if (!res.ok) {
+      alert(data.error || "Failed to cancel the appointment");
+      return;
+    }
+
+    setBookings((prev) =>
+      prev.map((item) =>
+        item.id === booking.id
+          ? {
+              ...item,
+              meta: {
+                ...item.meta,
+                status: "cancelled",
+                paymentStatus: data.refunded ? "refunded" : item.meta.paymentStatus,
+              },
+            }
+          : item,
+      ),
+    );
+
+    if (data.refunded) {
+      alert(
+        "Appointment cancelled. Your refund has been started and usually reaches your account in 5-7 working days.",
+      );
+    }
+  };
+
   const handleRetryNotification = async (bookingId: string) => {
     setRetryingNotification(bookingId);
     const res = await fetch(`/api/bookings/${bookingId}/notify`, {
@@ -666,14 +751,14 @@ export default function PatientDashboard() {
             </h2>
 
             <div className="space-y-4">
-              {bookings.length === 0 ? (
+              {upcomingBookings.length === 0 ? (
                 <div className="rounded-lg border bg-white p-5">
                   <p className="text-sm text-gray-600">
-                    No booked slots yet. Use quick actions to reserve a slot.
+                    No upcoming appointments. Use quick actions to book one.
                   </p>
                 </div>
               ) : (
-                bookings.map((booking) => (
+                upcomingBookings.map((booking) => (
                   <div
                     key={booking.id}
                     className="rounded-lg border bg-white p-5"
@@ -707,25 +792,37 @@ export default function PatientDashboard() {
                           className={`rounded-full px-3 py-1 text-xs ${
                             booking.meta.status === "completed"
                               ? "bg-emerald-100 text-emerald-700"
-                              : "bg-amber-100 text-amber-700"
+                              : booking.meta.status === "cancelled"
+                                ? "bg-gray-200 text-gray-600"
+                                : "bg-amber-100 text-amber-700"
                           }`}
                         >
                           {booking.meta.status === "completed"
                             ? "Completed"
-                            : "Booked"}
+                            : booking.meta.status === "cancelled"
+                              ? "Cancelled"
+                              : "Booked"}
                         </span>
                         <span
                           className={`rounded-full px-3 py-1 text-xs ${
                             booking.meta.paymentStatus === "paid"
                               ? "bg-emerald-100 text-emerald-700"
-                              : "bg-rose-100 text-rose-700"
+                              : booking.meta.paymentStatus === "refunded"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-rose-100 text-rose-700"
                           }`}
                         >
                           {booking.meta.paymentStatus === "paid"
                             ? "Payment Paid"
-                            : "Payment Pending"}
+                            : booking.meta.paymentStatus === "refunded"
+                              ? "Refunded"
+                              : booking.meta.status === "cancelled"
+                                ? "Not Paid"
+                                : "Payment Pending"}
                         </span>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2 md:justify-end">
+                          {booking.meta.status === "booked" ? (
+                          <>
                           <button
                             type="button"
                             onClick={() => void openEditBooking(booking)}
@@ -745,7 +842,11 @@ export default function PatientDashboard() {
                             </button>
                           ) : null}
 
-                          {booking.meta.paymentStatus === "paid" ? (
+                          </>
+                          ) : null}
+
+                          {booking.meta.paymentStatus === "paid" ||
+                          booking.meta.paymentStatus === "refunded" ? (
                             <a
                               href={`/api/bookings/${booking.id}/receipt`}
                               className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700"
@@ -753,16 +854,30 @@ export default function PatientDashboard() {
                               Download Receipt
                             </a>
                           ) : null}
-                          <button
-                            type="button"
-                            onClick={() => void handleRetryNotification(booking.id)}
-                            disabled={retryingNotification === booking.id}
-                            className="rounded-lg border border-blue-300 px-4 py-2 text-xs font-medium text-blue-700"
-                          >
-                            {retryingNotification === booking.id
-                              ? "Sending..."
-                              : "Send SMS"}
-                          </button>
+                          {booking.meta.status === "booked" ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => void handleRetryNotification(booking.id)}
+                                disabled={retryingNotification === booking.id}
+                                className="rounded-lg border border-blue-300 px-4 py-2 text-xs font-medium text-blue-700"
+                              >
+                                {retryingNotification === booking.id
+                                  ? "Sending..."
+                                  : "Send SMS"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleCancelBooking(booking)}
+                                disabled={cancellingBooking === booking.id}
+                                className="rounded-lg border border-red-300 px-4 py-2 text-xs font-medium text-red-600 hover:bg-red-50"
+                              >
+                                {cancellingBooking === booking.id
+                                  ? "Cancelling..."
+                                  : "Cancel"}
+                              </button>
+                            </>
+                          ) : null}
                         </div>
                         {booking.meta.notifications?.error ? (
                           <p className="max-w-xs text-xs text-rose-600">
@@ -782,12 +897,120 @@ export default function PatientDashboard() {
               Appointment History
             </h2>
 
-            <div className="rounded-lg border bg-white p-5">
-              <p className="text-sm text-gray-600">
-                Completed appointments will continue to appear here through the
-                booked slot list.
-              </p>
-            </div>
+            {pastBookings.length === 0 ? (
+              <div className="rounded-lg border bg-white p-5">
+                <p className="text-sm text-gray-600">
+                  Completed and cancelled appointments will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pastBookings.map((booking) => (
+                  <div
+                    key={booking.id}
+                    className="flex flex-col gap-3 rounded-lg border bg-white p-4 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div>
+                      <p className="font-semibold text-gray-800">{booking.doctor_name}</p>
+                      <p className="text-sm text-gray-500">
+                        {booking.specialization} • {booking.hospital_name}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {booking.appointment_date} at {booking.appointment_time.slice(0, 5)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs ${
+                          booking.meta.status === "completed"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-gray-200 text-gray-600"
+                        }`}
+                      >
+                        {booking.meta.status === "completed" ? "Completed" : "Cancelled"}
+                      </span>
+                      {booking.meta.paymentStatus === "refunded" ? (
+                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-700">
+                          Refunded
+                        </span>
+                      ) : null}
+                      {booking.meta.paymentStatus === "paid" ||
+                      booking.meta.paymentStatus === "refunded" ? (
+                        <a
+                          href={`/api/bookings/${booking.id}/receipt`}
+                          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700"
+                        >
+                          Receipt
+                        </a>
+                      ) : null}
+                      {booking.meta.status === "completed" ? (
+                        booking.review ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                            Your rating <Stars value={booking.review.rating} size={14} />
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReviewRating(0);
+                              setReviewComment("");
+                              setReviewingBooking(booking);
+                            }}
+                            className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600"
+                          >
+                            Rate doctor
+                          </button>
+                        )
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {reviewingBooking ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                <form
+                  onSubmit={submitReview}
+                  className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Rate {reviewingBooking.doctor_name}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {reviewingBooking.appointment_date} • {reviewingBooking.hospital_name}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReviewingBooking(null)}
+                      className="rounded-full p-1 text-gray-500 hover:bg-gray-100"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <StarInput value={reviewRating} onChange={setReviewRating} />
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    rows={3}
+                    maxLength={1000}
+                    placeholder="How was your visit? (optional)"
+                    className="w-full rounded-lg border border-gray-300 p-3 text-sm text-gray-700 outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={reviewRating < 1 || savingReview}
+                    className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                  >
+                    {savingReview ? "Saving..." : "Submit review"}
+                  </button>
+                </form>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -806,7 +1029,10 @@ export default function PatientDashboard() {
               </button>
 
               <button
-                onClick={() => setShowSlotModal(true)}
+                onClick={() => {
+                  setSlotPickerDateFilter("all");
+                  setShowSlotModal(true);
+                }}
                 className="w-full rounded-lg border bg-white p-4 text-gray-800 text-left transition cursor-pointer hover:shadow"
               >
                 View Slots
@@ -830,7 +1056,7 @@ export default function PatientDashboard() {
                 <b>
                   {
                     bookings.filter(
-                      (booking) => booking.meta.status !== "completed",
+                      (booking) => booking.meta.status === "booked",
                     ).length
                   }
                 </b>
@@ -1021,14 +1247,16 @@ export default function PatientDashboard() {
             <div className="grid gap-4 md:grid-cols-3">
               <select
                 value={slotSelection.hospitalId}
-                onChange={(e) =>
+                onChange={(e) => {
                   setSlotSelection({
                     hospitalId: e.target.value,
                     specialization: "",
                     doctorId: "",
                     reason: slotSelection.reason,
-                  })
-                }
+                  });
+                  setAvailableSlots([]);
+                  setSlotPickerDateFilter("all");
+                }}
                 className="rounded-2xl border border-gray-200 p-4"
               >
                 <option value="">Select Hospital</option>
@@ -1041,13 +1269,15 @@ export default function PatientDashboard() {
 
               <select
                 value={slotSelection.specialization}
-                onChange={(e) =>
+                onChange={(e) => {
                   setSlotSelection((prev) => ({
                     ...prev,
                     specialization: e.target.value,
                     doctorId: "",
-                  }))
-                }
+                  }));
+                  setAvailableSlots([]);
+                  setSlotPickerDateFilter("all");
+                }}
                 className="rounded-2xl border border-gray-200 p-4"
               >
                 <option value="">Select Specialist</option>
@@ -1060,12 +1290,16 @@ export default function PatientDashboard() {
 
               <select
                 value={slotSelection.doctorId}
-                onChange={(e) =>
+                onChange={(e) => {
                   setSlotSelection((prev) => ({
                     ...prev,
                     doctorId: e.target.value,
-                  }))
-                }
+                  }));
+                  if (!e.target.value) {
+                    setAvailableSlots([]);
+                  }
+                  setSlotPickerDateFilter("all");
+                }}
                 className="rounded-2xl border border-gray-200 p-4"
               >
                 <option value="">Select Doctor</option>

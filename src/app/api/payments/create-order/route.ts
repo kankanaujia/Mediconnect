@@ -1,8 +1,9 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { parseBookingReason, serializeBookingReason } from "@/lib/bookingMeta";
+import { bookingFromRow, bookingColumns } from "@/lib/bookingMeta";
 import { bookingCurrency, getBookingAmount } from "@/lib/paymentConfig";
+import { forbidden, getSession, unauthorized } from "@/lib/session";
 
 function getRazorpayConfig() {
   const keyId = process.env.RAZORPAY_KEY_ID;
@@ -25,6 +26,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const session = await getSession();
+  if (!session) {
+    return unauthorized();
+  }
+
   const { bookingId } = (await req.json()) as { bookingId: string };
 
   const { data: booking, error } = await supabaseAdmin
@@ -37,7 +43,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
-  const parsed = parseBookingReason(booking.reason);
+  if (session.role !== "patient" || booking.patient_id !== session.id) {
+    return forbidden();
+  }
+
+  const parsed = bookingFromRow(booking);
+
+  if (parsed.meta.status !== "booked") {
+    return NextResponse.json(
+      { error: `This booking is ${parsed.meta.status} and cannot be paid.` },
+      { status: 409 }
+    );
+  }
+
+  if (parsed.meta.paymentStatus === "paid") {
+    return NextResponse.json({ error: "This booking is already paid." }, { status: 409 });
+  }
   const amount = parsed.meta.amount ?? getBookingAmount(parsed.meta.kind);
   const receiptId = parsed.meta.receiptId ?? `rcpt_${randomUUID().slice(0, 8)}`;
 
@@ -72,7 +93,7 @@ export async function POST(req: Request) {
   await supabaseAdmin
     .from("bookings")
     .update({
-      reason: serializeBookingReason(parsed.reason, {
+      ...bookingColumns(parsed.reason, {
         ...parsed.meta,
         paymentStatus: "pending",
         paymentOrderId: order.id,

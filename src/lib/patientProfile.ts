@@ -54,3 +54,31 @@ export function parsePatientAddress(value: string | null | undefined) {
     };
   }
 }
+
+export type PatientRow = {
+  id: string;
+  name: string;
+  email: string;
+  password?: string;
+  phone: string;
+  address: string;
+};
+
+/** Public patient shape returned by the API. Never includes the password. */
+export function shapePatient(row: PatientRow) {
+  const profile = parsePatientAddress(row.address);
+  const nameParts = (row.name ?? "").split(" ");
+
+  return {
+    id: row.id,
+    name: row.name,
+    first_name: nameParts[0] ?? "",
+    last_name: nameParts.slice(1).join(" "),
+    email: row.email,
+    phone: row.phone,
+    address: profile.address,
+    location: profile.location,
+    gender: profile.gender,
+    date_of_birth: profile.date_of_birth,
+  };
+}

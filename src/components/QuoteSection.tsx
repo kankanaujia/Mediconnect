@@ -44,9 +44,9 @@ export default function QuoteSection() {
         ${visible ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-10 scale-95"}`}
       >
         <p className="text-2xl md:text-3xl font-serif font-semibold text-gray-800 leading-relaxed">
-          "Medicine is not only a science; it is also an art. It does not consist
+          &ldquo;Medicine is not only a science; it is also an art. It does not consist
           of compounding pills and plasters; it deals with the very processes of
-          life."
+          life.&rdquo;
         </p>
 
         {/* Underline Accent */}

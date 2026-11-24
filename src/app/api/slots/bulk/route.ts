@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
+import { getSession, unauthorized } from "@/lib/session";
 
 type IncomingSlot = {
   doctor_id: string;
@@ -9,6 +10,11 @@ type IncomingSlot = {
 };
 
 export async function POST(req: Request) {
+  const session = await getSession();
+  if (!session || session.role !== "doctor") {
+    return unauthorized("Please log in as a doctor.");
+  }
+
   const body = (await req.json()) as { slots?: IncomingSlot[] };
   const slots = Array.isArray(body.slots) ? body.slots : [];
 
@@ -17,7 +23,7 @@ export async function POST(req: Request) {
   }
 
   const rows = slots.map((slot) => ({
-    doctor_id: slot.doctor_id,
+    doctor_id: session.id,
     date: slot.date,
     duration: slot.duration,
     location: slot.location,

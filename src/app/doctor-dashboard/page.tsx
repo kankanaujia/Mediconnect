@@ -16,6 +16,7 @@ import {
   type ScheduleEntry,
 } from "@/lib/doctorSchedule";
 import { supabase } from "@/lib/supabase";
+import WeekCalendar from "@/components/doctor/WeekCalendar";
 
 type Slot = {
   id: string;
@@ -30,14 +31,15 @@ type Booking = {
   patient_id: string;
   doctor_id: string;
   hospital_id: string;
+  hospital_name?: string;
   appointment_date: string;
   appointment_time: string;
   reason: string;
   meta: {
     kind: "daily" | "special";
-    status: "booked" | "completed";
+    status: "booked" | "completed" | "cancelled";
     slotId?: string;
-    paymentStatus?: "pending" | "paid" | "failed";
+    paymentStatus?: "pending" | "paid" | "failed" | "refunded";
   };
   patient_name: string;
 };
@@ -82,6 +84,17 @@ export default function DoctorDashboard() {
     null,
   );
   const [loading, setLoading] = useState(true);
+  const [showProfile, setShowProfile] = useState(false);
+  const [bookingView, setBookingView] = useState<"list" | "week">("list");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    phone: "",
+    qualifications: "",
+    experience_years: "",
+    consultation_fee: "",
+    image_url: "",
+    bio: "",
+  });
   const [slotForm, setSlotForm] = useState({
     date: "",
     duration: "20",
@@ -98,12 +111,15 @@ export default function DoctorDashboard() {
     }
 
     const parsed = JSON.parse(storedUser) as DoctorUser;
+    // Restoring the saved login from localStorage on mount is a one-off sync
+    // from an external store, which is what this effect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(parsed);
     void loadHospitalName(parsed);
     void loadDoctorData(parsed.id);
   }, [router]);
 
-  const loadHospitalName = async (doctor: DoctorUser) => {
+  async function loadHospitalName(doctor: DoctorUser) {
     if (!doctor.hospital_id) return;
 
     const { data, error } = await supabase
@@ -126,7 +142,7 @@ export default function DoctorDashboard() {
     localStorage.setItem("doctor", JSON.stringify(updatedDoctor));
   };
 
-  const loadDoctorData = async (doctorId: string) => {
+  async function loadDoctorData(doctorId: string) {
     setLoading(true);
 
     try {
@@ -135,6 +151,11 @@ export default function DoctorDashboard() {
         fetch(`/api/bookings?doctor_id=${doctorId}`),
         fetch(`/api/schedules?doctor_id=${doctorId}`),
       ]);
+
+      if (bookingsRes.status === 401) {
+        handleLogout();
+        return;
+      }
 
       const [slotsData, bookingsData, schedulesData] = await Promise.all([
         slotsRes.json(),
@@ -155,7 +176,7 @@ export default function DoctorDashboard() {
   };
 
   const activeBookings = useMemo(
-    () => bookings.filter((booking) => booking.meta.status !== "completed"),
+    () => bookings.filter((booking) => booking.meta.status === "booked"),
     [bookings],
   );
 
@@ -200,7 +221,40 @@ export default function DoctorDashboard() {
     return schedules.filter((entry) => Number(entry.dayOfWeek) === day);
   }, [schedules, scheduleDayFilter]);
 
+  const openProfile = async () => {
+    setShowProfile(true);
+    const res = await fetch("/api/doctors/me");
+    if (!res.ok) return;
+    const data = await res.json();
+    setProfileForm({
+      phone: data.phone ?? "",
+      qualifications: data.qualifications ?? "",
+      experience_years: data.experience_years?.toString() ?? "",
+      consultation_fee: data.consultation_fee?.toString() ?? "",
+      image_url: data.image_url ?? "",
+      bio: data.bio ?? "",
+    });
+  };
+
+  const saveProfile = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    const res = await fetch("/api/doctors/me", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profileForm),
+    });
+    const data = await res.json();
+    setSavingProfile(false);
+    if (!res.ok) {
+      alert(data.error || "Could not save your profile");
+      return;
+    }
+    setShowProfile(false);
+  };
+
   const handleLogout = () => {
+    void fetch("/api/auth/logout", { method: "POST" });
     localStorage.removeItem("doctor");
     router.push("/Doctor_login");
   };
@@ -349,6 +403,40 @@ export default function DoctorDashboard() {
     setSchedules((prev) => prev.filter((entry) => entry.id !== id));
   };
 
+  const handleCancelBooking = async (booking: Booking) => {
+    const paid = booking.meta.paymentStatus === "paid";
+    const confirmed = window.confirm(
+      paid
+        ? `Cancel ${booking.patient_name}'s appointment? Their payment will be refunded in full.`
+        : `Cancel ${booking.patient_name}'s appointment?`,
+    );
+    if (!confirmed) return;
+
+    const res = await fetch(`/api/bookings/${booking.id}/cancel`, { method: "POST" });
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "Failed to cancel the appointment");
+      return;
+    }
+
+    setBookings((prev) =>
+      prev.map((item) =>
+        item.id === booking.id
+          ? {
+              ...item,
+              meta: {
+                ...item.meta,
+                status: "cancelled",
+                paymentStatus: data.refunded ? "refunded" : item.meta.paymentStatus,
+              },
+            }
+          : item,
+      ),
+    );
+    void loadDoctorData(booking.doctor_id);
+  };
+
   const handleMarkCompleted = async (bookingId: string) => {
     const res = await fetch("/api/bookings", {
       method: "PUT",
@@ -442,7 +530,7 @@ export default function DoctorDashboard() {
 
     try {
       const today = new Date();
-      let newSlots: any[] = [];
+      const newSlots: { doctor_id: string; date: string; duration: number; location: string }[] = [];
 
       for (let i = 0; i < 7; i++) {
         const current = new Date();
@@ -453,8 +541,8 @@ export default function DoctorDashboard() {
         );
 
         for (const sch of daySchedules) {
-          let start = new Date(current);
-          let end = new Date(current);
+          const start = new Date(current);
+          const end = new Date(current);
 
           const [sh, sm] = sch.startTime.split(":");
           const [eh, em] = sch.endTime.split(":");
@@ -533,13 +621,95 @@ export default function DoctorDashboard() {
           )}
         </div>
 
-        <button
-          onClick={handleLogout}
-          className="rounded-lg bg-red-100 px-5 py-2 text-red-600 hover:bg-red-200 transition-colors"
-        >
-          Logout
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => void openProfile()}
+            className="rounded-lg border border-gray-300 bg-white px-5 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            My public profile
+          </button>
+          <button
+            onClick={handleLogout}
+            className="rounded-lg bg-red-100 px-5 py-2 text-red-600 hover:bg-red-200 transition-colors"
+          >
+            Logout
+          </button>
+        </div>
       </div>
+
+      {showProfile ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <form
+            onSubmit={saveProfile}
+            className="max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">My public profile</h3>
+                <p className="text-sm text-gray-500">Patients see this on your profile page.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProfile(false)}
+                className="text-gray-500 hover:text-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+            {(
+              [
+                ["qualifications", "Qualifications", "text", "MBBS, MD (Cardiology)"],
+                ["experience_years", "Experience (years)", "number", ""],
+                ["consultation_fee", "Consultation fee (₹)", "number", ""],
+                ["phone", "Phone", "tel", ""],
+                ["image_url", "Photo URL", "url", "https://..."],
+              ] as const
+            ).map(([key, label, type, placeholder]) => (
+              <label key={key} className="block text-sm text-gray-600">
+                {label}
+                <input
+                  type={type}
+                  min={type === "number" ? 0 : undefined}
+                  placeholder={placeholder}
+                  value={profileForm[key]}
+                  onChange={(e) =>
+                    setProfileForm((prev) => ({ ...prev, [key]: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800"
+                />
+              </label>
+            ))}
+            <label className="block text-sm text-gray-600">
+              About you
+              <textarea
+                rows={4}
+                value={profileForm.bio}
+                onChange={(e) => setProfileForm((prev) => ({ ...prev, bio: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800"
+              />
+            </label>
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={savingProfile}
+                className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {savingProfile ? "Saving..." : "Save profile"}
+              </button>
+              {user?.id ? (
+                <a
+                  href={`/Doctors/${user.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm text-gray-700"
+                >
+                  View
+                </a>
+              ) : null}
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       <div className="mb-10 grid grid-cols-2 gap-4 font-serif text-gray-800 md:grid-cols-4">
         {[
@@ -679,9 +849,25 @@ export default function DoctorDashboard() {
               <h2 className="text-2xl font-semibold text-gray-900">
                 Booked Appointments
               </h2>
+              <div className="flex rounded-lg border p-0.5 text-sm">
+                {(["list", "week"] as const).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    onClick={() => setBookingView(view)}
+                    className={`rounded-md px-3 py-1 capitalize ${
+                      bookingView === view ? "bg-gray-900 text-white" : "text-gray-600"
+                    }`}
+                  >
+                    {view === "week" ? "Calendar" : "List"}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="space-y-4">
+            {bookingView === "week" ? <WeekCalendar bookings={bookings} /> : null}
+
+            <div className={bookingView === "week" ? "hidden" : "space-y-4"}>
               {bookings.length === 0 ? (
                 <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
                   No bookings yet.
@@ -698,7 +884,7 @@ export default function DoctorDashboard() {
                           {booking.patient_name}
                         </p>
                         <p className="text-sm text-gray-500 font-medium">
-                          {booking.hospital_id} •{" "}
+                          {booking.hospital_name || "Hospital"} •{" "}
                           {booking.meta.kind === "special"
                             ? "Special Appointment"
                             : "Daily Slot"}
@@ -719,33 +905,50 @@ export default function DoctorDashboard() {
                           className={`rounded-full px-3 py-1 text-xs font-medium ${
                             booking.meta.status === "completed"
                               ? "bg-emerald-100 text-emerald-700"
-                              : "bg-amber-100 text-amber-700"
+                              : booking.meta.status === "cancelled"
+                                ? "bg-gray-200 text-gray-600"
+                                : "bg-amber-100 text-amber-700"
                           }`}
                         >
                           {booking.meta.status === "completed"
                             ? "Completed"
-                            : "Booked"}
+                            : booking.meta.status === "cancelled"
+                              ? "Cancelled"
+                              : "Booked"}
                         </span>
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-medium ${
                             booking.meta.paymentStatus === "paid"
                               ? "bg-blue-100 text-blue-700"
-                              : "bg-rose-100 text-rose-700"
+                              : booking.meta.paymentStatus === "refunded"
+                                ? "bg-gray-200 text-gray-600"
+                                : "bg-rose-100 text-rose-700"
                           }`}
                         >
                           {booking.meta.paymentStatus === "paid"
                             ? "Payment Paid"
-                            : "Payment Pending"}
+                            : booking.meta.paymentStatus === "refunded"
+                              ? "Refunded"
+                              : "Payment Pending"}
                         </span>
 
-                        {booking.meta.status !== "completed" ? (
-                          <button
-                            type="button"
-                            onClick={() => void handleMarkCompleted(booking.id)}
-                            className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white hover:bg-black transition-colors"
-                          >
-                            Mark Completed
-                          </button>
+                        {booking.meta.status === "booked" ? (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleMarkCompleted(booking.id)}
+                              className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white hover:bg-black transition-colors"
+                            >
+                              Mark Completed
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleCancelBooking(booking)}
+                              className="rounded-lg border border-red-300 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         ) : null}
                       </div>
                     </div>

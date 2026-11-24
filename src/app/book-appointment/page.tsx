@@ -26,9 +26,35 @@ type Booking = {
   appointment_date: string;
   appointment_time: string;
   meta: {
-    status: "booked" | "completed";
+    status: "booked" | "completed" | "cancelled";
   };
 };
+
+async function fetchSpecialAvailability(doctorId: string, date: string) {
+  const [scheduleRes, bookingsRes] = await Promise.all([
+    fetch(`/api/schedules?doctor_id=${doctorId}`),
+    fetch(`/api/bookings?doctor_id=${doctorId}`),
+  ]);
+
+  const [scheduleData, bookingsData] = await Promise.all([
+    scheduleRes.json(),
+    bookingsRes.json(),
+  ]);
+
+  const schedules = Array.isArray(scheduleData) ? (scheduleData as ScheduleEntry[]) : [];
+  const activeBookings = Array.isArray(bookingsData)
+    ? (bookingsData as Booking[]).filter((booking) => booking.meta.status === "booked")
+    : [];
+
+  const blockedTimes = activeBookings
+    .filter((booking) => booking.appointment_date === date)
+    .map((booking) => booking.appointment_time.slice(0, 5));
+
+  return {
+    schedules,
+    times: generateSpecialAppointmentTimes(schedules, date, blockedTimes),
+  };
+}
 
 export default function BookAppointment() {
   const router = useRouter();
@@ -50,8 +76,13 @@ export default function BookAppointment() {
   const [selectedTime, setSelectedTime] = useState("");
   const [reason, setReason] = useState("");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
-  const [loadingTimes, setLoadingTimes] = useState(false);
+  // Which doctor+date the current availableTimes were loaded for.
+  const [loadedAvailabilityKey, setLoadedAvailabilityKey] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const availabilityKey =
+    selectedDoctorId && selectedDate ? `${selectedDoctorId}|${selectedDate}` : "";
+  const loadingTimes = availabilityKey !== "" && loadedAvailabilityKey !== availabilityKey;
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -60,22 +91,11 @@ export default function BookAppointment() {
       return;
     }
 
+    // Restoring the saved login from localStorage on mount is a one-off sync
+    // from an external store, which is what this effect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(JSON.parse(storedUser));
   }, [router]);
-
-  useEffect(() => {
-    void loadBaseData();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedDoctorId || !selectedDate) {
-      setAvailableTimes([]);
-      setSelectedTime("");
-      return;
-    }
-
-    void loadSpecialAvailability(selectedDoctorId, selectedDate);
-  }, [selectedDoctorId, selectedDate]);
 
   const filteredDoctors = useMemo(() => {
     return doctors.filter((doctor) => {
@@ -100,48 +120,54 @@ export default function BookAppointment() {
 
   const selectedDoctor = filteredDoctors.find((doctor) => doctor.id === selectedDoctorId);
 
-  const loadBaseData = async () => {
-    const [hospitalResult, doctorResult] = await Promise.all([
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.all([
       supabase.from("hospitals").select("id, name, location").order("name"),
       supabase
         .from("doctors")
         .select("id, name, specialization, hospital_id")
         .eq("approved", true)
         .order("name"),
-    ]);
+    ]).then(([hospitalResult, doctorResult]) => {
+      if (cancelled) return;
+      const loadedDoctors = (doctorResult.data as Doctor[]) ?? [];
+      setHospitals((hospitalResult.data as Hospital[]) ?? []);
+      setDoctors(loadedDoctors);
 
-    setHospitals((hospitalResult.data as Hospital[]) ?? []);
-    setDoctors((doctorResult.data as Doctor[]) ?? []);
-  };
+      // Opened from a doctor's profile: /book-appointment?doctor=<id>
+      const requested = new URLSearchParams(window.location.search).get("doctor");
+      const match = loadedDoctors.find((doctor) => doctor.id === requested);
+      if (match) {
+        setSelectedHospitalId(match.hospital_id);
+        setSelectedSpecialization(match.specialization);
+        setSelectedDoctorId(match.id);
+      }
+    });
 
-  const loadSpecialAvailability = async (doctorId: string, date: string) => {
-    setLoadingTimes(true);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-    const [scheduleRes, bookingsRes] = await Promise.all([
-      fetch(`/api/schedules?doctor_id=${doctorId}`),
-      fetch(`/api/bookings?doctor_id=${doctorId}`),
-    ]);
+  useEffect(() => {
+    if (!availabilityKey) return;
+    let cancelled = false;
 
-    const [scheduleData, bookingsData] = await Promise.all([
-      scheduleRes.json(),
-      bookingsRes.json(),
-    ]);
+    fetchSpecialAvailability(selectedDoctorId, selectedDate)
+      .catch(() => ({ schedules: [] as ScheduleEntry[], times: [] as string[] }))
+      .then(({ schedules, times }) => {
+        if (cancelled) return;
+        setScheduleEntries(schedules);
+        setAvailableTimes(times);
+        setLoadedAvailabilityKey(availabilityKey);
+      });
 
-    const nextSchedules = Array.isArray(scheduleData)
-      ? (scheduleData as ScheduleEntry[])
-      : [];
-    const activeBookings = Array.isArray(bookingsData)
-      ? (bookingsData as Booking[]).filter((booking) => booking.meta.status !== "completed")
-      : [];
-
-    const blockedTimes = activeBookings
-      .filter((booking) => booking.appointment_date === date)
-      .map((booking) => booking.appointment_time.slice(0, 5));
-
-    setScheduleEntries(nextSchedules);
-    setAvailableTimes(generateSpecialAppointmentTimes(nextSchedules, date, blockedTimes));
-    setLoadingTimes(false);
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [availabilityKey, selectedDoctorId, selectedDate]);
 
   const handleConfirm = async () => {
     if (!user?.id || !selectedDoctor || !selectedDate || !selectedTime) {
@@ -228,6 +254,7 @@ export default function BookAppointment() {
                 setSelectedSpecialization("");
                 setSelectedDoctorId("");
                 setSelectedTime("");
+                setAvailableTimes([]);
               }}
               className="rounded-2xl border border-gray-200 p-2 text-gray-800"
             >
@@ -245,6 +272,7 @@ export default function BookAppointment() {
                 setSelectedSpecialization(e.target.value);
                 setSelectedDoctorId("");
                 setSelectedTime("");
+                setAvailableTimes([]);
               }}
               className="rounded-2xl border border-gray-200 p-4 text-gray-800"
             >
@@ -261,6 +289,7 @@ export default function BookAppointment() {
               onChange={(e) => {
                 setSelectedDoctorId(e.target.value);
                 setSelectedTime("");
+                setAvailableTimes([]);
               }}
               className="rounded-2xl border border-gray-200 p-4"
             >
@@ -278,6 +307,7 @@ export default function BookAppointment() {
               onChange={(e) => {
                 setSelectedDate(e.target.value);
                 setSelectedTime("");
+                setAvailableTimes([]);
               }}
               className="rounded-2xl border text-gray-800 border-gray-200 p-4"
             />

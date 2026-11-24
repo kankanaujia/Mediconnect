@@ -49,7 +49,7 @@ export default function ProcessSection() {
             </h2>
 
             <p className="mt-6 font-serif text-gray-500 max-w-md">
-              We've streamlined the appointment process to save you time and
+              We&apos;ve streamlined the appointment process to save you time and
               provide clarity at every step. No more waiting on hold.
             </p>
 
