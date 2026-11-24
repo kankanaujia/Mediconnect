@@ -32,8 +32,28 @@ export async function refundPayment(paymentId: string, amount?: number) {
   };
 
   if (!response.ok || !data.id) {
-    throw new Error(data.error?.description || "Razorpay refund failed");
+    const reason = data.error?.description || "Razorpay refund failed";
+
+    // Demo safety net, TEST KEYS ONLY: Razorpay test accounts whose onboarding
+    // (KYC) is not finished reject refund calls with "invalid request sent".
+    // Test payments are never real money, so record a simulated refund so the
+    // cancel-and-refund flow can still be demonstrated. Live keys never reach
+    // this branch: a failed live refund always stops the cancellation.
+    if (isTestMode()) {
+      console.warn(`[razorpay] test-mode refund rejected (${reason}); recording a simulated refund`);
+      return {
+        refundId: `demo_rfnd_${Date.now().toString(36)}`,
+        status: "simulated (test mode)",
+      };
+    }
+
+    throw new Error(reason);
   }
 
   return { refundId: data.id, status: data.status ?? "processed" };
+}
+
+/** True when the app is using Razorpay test keys, where no real money moves. */
+export function isTestMode() {
+  return (process.env.RAZORPAY_KEY_ID ?? "").startsWith("rzp_test_");
 }

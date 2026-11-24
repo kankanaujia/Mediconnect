@@ -127,6 +127,8 @@ The demo accounts have no database rows, so their dashboards are empty.
 - Payment status is set only by the server after verifying Razorpay's signature and order.
 - Patients can cancel up to 2 hours before an appointment; doctors and admins any time before it is completed. Paid bookings are refunded in full automatically. Appointment times are India time (IST).
 - The database allows only one active booking per doctor per time slot.
+- **Test mode only:** Razorpay test accounts with unfinished onboarding (KYC) reject refund calls. With `rzp_test_` keys the app then records a *simulated* refund (refund id `demo_rfnd_...`) so the cancel-and-refund flow can be demonstrated. Test payments are never real money, and with live keys a failed refund always stops the cancellation.
+- To pay in test mode use Razorpay's test card `4100 2800 0000 1007`, any future expiry, any CVV, then click **Success** on Razorpay's test bank page.
 
 ## Scripts
 
