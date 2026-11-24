@@ -4,7 +4,7 @@ export default function Specialties() {
   const data = [
     {
       title: "Cardiology",
-      image: "images/cardiology.jpg",
+      image: "/images/cardiology.jpg",
       icon: "❤️",
       gradient: "bg-gradient-to-r from-red-300/70 to-red-200/40",
       quote: "Heart health tips",
@@ -17,7 +17,7 @@ export default function Specialties() {
     },
     {
       title: "Neurology",
-      image: "images/neurology.webp",
+      image: "/images/neurology.webp",
       icon: "🧠",
       gradient: "bg-gradient-to-r from-purple-300/70 to-indigo-200/40",
       quote: "Brain health tips",
@@ -30,7 +30,7 @@ export default function Specialties() {
     },
     {
       title: "General Medicine",
-      image: "images/gen_medicine.jpg",
+      image: "/images/gen_medicine.jpg",
       icon: "🩺",
       gradient: "bg-gradient-to-r from-blue-300/70 to-cyan-200/40",
       quote: "Wellness tips",

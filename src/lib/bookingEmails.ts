@@ -106,6 +106,35 @@ export async function sendBookingConfirmedEmail(booking: BookingRow, baseUrl: st
   });
 }
 
+/** Sent to the patient when their appointment moves to a new date or time. */
+export async function sendBookingRescheduledEmail(
+  booking: BookingRow,
+  previous: { date: string; time: string },
+  baseUrl: string
+) {
+  const { patient, doctor, hospital } = await loadParties(booking);
+  if (!patient?.email) return;
+
+  const { html, text } = emailLayout(
+    "Your appointment has a new time",
+    [
+      `Hi ${patient.name || "there"},`,
+      `Your appointment with ${doctor?.name ?? "your doctor"} has been moved.`,
+      `Before: ${previous.date} at ${previous.time.slice(0, 5)}`,
+      `Now: ${whenText(booking)}`,
+      hospital ? `Where: ${placeText(hospital)}` : "",
+    ].filter(Boolean),
+    { label: "Open my dashboard", url: `${baseUrl}/patient-dashboard` }
+  );
+
+  await sendEmail({
+    to: patient.email,
+    subject: `Appointment moved to ${whenText(booking)}`,
+    html,
+    text,
+  });
+}
+
 /** Sent to the patient and the doctor when a booking is cancelled. */
 export async function sendBookingCancelledEmails(
   booking: BookingRow,

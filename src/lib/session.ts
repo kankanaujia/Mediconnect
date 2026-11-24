@@ -114,9 +114,3 @@ export function canAccessBooking(
     (session.role === "doctor" && booking.doctor_id === session.id)
   );
 }
-
-export function isDemoLoginEnabled() {
-  return (
-    process.env.NODE_ENV !== "production" || process.env.ENABLE_DEMO_LOGIN === "true"
-  );
-}

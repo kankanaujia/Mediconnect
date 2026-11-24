@@ -9,6 +9,11 @@ type ReceiptInput = {
   currency: string;
   paymentId?: string;
   bookingType: string;
+  /** "booked" | "completed" | "cancelled" */
+  status?: string;
+  refundId?: string;
+  refundStatus?: string;
+  cancelledAt?: string;
 };
 
 function escapePdfText(value: string) {
@@ -27,7 +32,26 @@ export function generateReceiptPdf(input: ReceiptInput) {
     `Appointment: ${input.appointmentDate} ${input.appointmentTime}`,
     `Amount Paid: ${amountText}`,
     `Payment ID: ${input.paymentId ?? "Pending"}`,
+    `Status: ${
+      input.status === "cancelled"
+        ? "CANCELLED"
+        : input.status === "completed"
+          ? "COMPLETED"
+          : "CONFIRMED"
+    }`,
   ];
+
+  if (input.status === "cancelled") {
+    lines.push(`Cancelled on: ${input.cancelledAt ? input.cancelledAt.slice(0, 10) : "-"}`);
+    if (input.refundId) {
+      lines.push(`REFUNDED: ${amountText} (refund ${input.refundId})`);
+      if (input.refundStatus?.includes("simulated")) {
+        lines.push("Test mode: simulated refund, no real money moved.");
+      }
+    } else {
+      lines.push("No refund issued.");
+    }
+  }
 
   const stream = lines
     .map(

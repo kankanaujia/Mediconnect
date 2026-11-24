@@ -20,7 +20,11 @@ type Doctor = {
   name: string;
   specialization: string;
   hospital_id: string;
+  consultation_fee: number | null;
 };
+
+// Must match src/lib/paymentConfig.ts (prices shown before checkout).
+const DEFAULT_SPECIAL_FEE = 700;
 
 type Booking = {
   appointment_date: string;
@@ -68,7 +72,6 @@ export default function BookAppointment() {
   } | null>(null);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [scheduleEntries, setScheduleEntries] = useState<ScheduleEntry[]>([]);
   const [selectedHospitalId, setSelectedHospitalId] = useState("");
   const [selectedSpecialization, setSelectedSpecialization] = useState("");
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
@@ -125,14 +128,10 @@ export default function BookAppointment() {
 
     void Promise.all([
       supabase.from("hospitals").select("id, name, location").order("name"),
-      supabase
-        .from("doctors")
-        .select("id, name, specialization, hospital_id")
-        .eq("approved", true)
-        .order("name"),
-    ]).then(([hospitalResult, doctorResult]) => {
+      fetch("/api/doctors").then((res) => res.json()),
+    ]).then(([hospitalResult, doctorData]) => {
       if (cancelled) return;
-      const loadedDoctors = (doctorResult.data as Doctor[]) ?? [];
+      const loadedDoctors = Array.isArray(doctorData) ? (doctorData as Doctor[]) : [];
       setHospitals((hospitalResult.data as Hospital[]) ?? []);
       setDoctors(loadedDoctors);
 
@@ -157,9 +156,8 @@ export default function BookAppointment() {
 
     fetchSpecialAvailability(selectedDoctorId, selectedDate)
       .catch(() => ({ schedules: [] as ScheduleEntry[], times: [] as string[] }))
-      .then(({ schedules, times }) => {
+      .then(({ times }) => {
         if (cancelled) return;
-        setScheduleEntries(schedules);
         setAvailableTimes(times);
         setLoadedAvailabilityKey(availabilityKey);
       });
@@ -381,8 +379,12 @@ export default function BookAppointment() {
               Time: <span className="text-white">{selectedTime || "Not selected"}</span>
             </p>
             <p>
-              Schedule items loaded:{" "}
-              <span className="text-white">{scheduleEntries.length}</span>
+              Fee:{" "}
+              <span className="text-white">
+                {selectedDoctor
+                  ? `₹${selectedDoctor.consultation_fee && selectedDoctor.consultation_fee > 0 ? selectedDoctor.consultation_fee : DEFAULT_SPECIAL_FEE}`
+                  : "Select a doctor"}
+              </span>
             </p>
           </div>
 

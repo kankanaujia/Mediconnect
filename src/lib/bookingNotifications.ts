@@ -103,6 +103,63 @@ export async function sendNotificationsForBooking(booking: BookingRow) {
   return { confirmation, reminders, error, patientLocation };
 }
 
+/**
+ * After the date or time changed: move the reminders to the new time (paid
+ * bookings only) and tell the patient. Stores the new reminder ids.
+ */
+export async function handleRescheduledBooking(
+  booking: BookingRow,
+  previous: { date: string; time: string }
+) {
+  const meta = bookingFromRow(booking).meta;
+  await cancelScheduledMessages((meta.notifications?.reminders ?? []).map((r) => r.sid));
+
+  const { patient, doctorName } = await loadPeople(booking);
+  let reminders: Array<{ sid: string; sendAt: string; label: string }> = [];
+
+  if (patient?.phone && meta.paymentStatus === "paid") {
+    try {
+      reminders = await scheduleBookingReminders({
+        phone: patient.phone,
+        patientName: patient.name,
+        doctorName,
+        appointmentDate: booking.appointment_date,
+        appointmentTime: booking.appointment_time,
+      });
+    } catch {
+      // Logged in sms.ts.
+    }
+  }
+
+  await supabaseAdmin
+    .from("bookings")
+    .update({
+      notifications: {
+        ...(meta.notifications ?? {}),
+        lastAttemptAt: new Date().toISOString(),
+        reminders: reminders.map((r) => ({ ...r, status: "scheduled" })),
+      },
+    })
+    .eq("id", booking.id);
+
+  if (patient?.phone) {
+    try {
+      await sendSms(
+        patient.phone,
+        `Hi ${patient.name}, your appointment with ${doctorName} has moved from ${previous.date} ${previous.time.slice(0, 5)} to ${when(booking)}. - MediConnect`
+      );
+    } catch {
+      // Logged in sms.ts.
+    }
+  }
+}
+
+/** When a visit is completed, reminders that have not gone out yet are no longer needed. */
+export async function cancelBookingReminders(booking: BookingRow) {
+  const meta = bookingFromRow(booking).meta;
+  await cancelScheduledMessages((meta.notifications?.reminders ?? []).map((r) => r.sid));
+}
+
 /** After a cancellation: stop pending reminders and tell the patient (with refund info). */
 export async function sendCancellationSms(
   booking: BookingRow,

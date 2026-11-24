@@ -1,4 +1,6 @@
 "use client";
+
+import Image from "next/image";
 //import { useSpring } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
@@ -28,10 +30,12 @@ export default function QuoteSection() {
         className={`absolute inset-0 transition-transform duration-1200ms ease-out
         ${visible ? "scale-110" : "scale-100"}`}
       >
-        <img
-          src="images/quote_bg.jpg"
+        <Image
+          src="/images/quote_bg.jpg"
           alt="Hospital"
-          className="w-full h-full object-cover"
+          fill
+          sizes="100vw"
+          className="object-cover"
         />
       </div>
 

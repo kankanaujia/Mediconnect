@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- doctor photos are external URLs entered by doctors, so plain <img> is used */
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";

@@ -82,7 +82,6 @@ tests/                       Unit tests (Vitest)
    | `RESEND_API_KEY`, `EMAIL_FROM` | [resend.com](https://resend.com) → API Keys. Optional: without them emails are printed to the server log. |
    | `APP_URL` | The site's public address, used in email links (e.g. `https://mediconnect.vercel.app`) |
    | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID` | Twilio console. Optional: without them no SMS is sent. |
-   | `ENABLE_DEMO_LOGIN` | `true` to allow the demo accounts in production. They always work in development. |
 
 3. Run the database migrations in order, in the Supabase SQL Editor (New query → paste → Run):
 
@@ -104,14 +103,19 @@ tests/                       Unit tests (Vitest)
    npm run dev
    ```
 
-### Demo accounts (development only)
+### Demo data
+
+```bash
+node scripts/seed-demo-data.mjs           # add demo accounts, doctor profiles, schedules, upcoming slots
+node scripts/seed-demo-data.mjs --remove  # undo everything the script added
+```
+
+It only fills in what is missing and never overwrites existing data. It creates two demo accounts:
 
 | Role | Email | Password |
 | --- | --- | --- |
 | Patient | `patient@demo.com` | `demo123` |
 | Doctor | `doctor@demo.com` | `demo123` |
-
-The demo accounts have no database rows, so their dashboards are empty.
 
 ## Deploying to Vercel
 
@@ -140,3 +144,4 @@ The demo accounts have no database rows, so their dashboards are empty.
 | `npm run lint` | ESLint |
 | `node scripts/create-admin.mjs "Name" email` | Create or reset an admin account |
 | `node scripts/hash-legacy-passwords.mjs [--apply]` | Hash any remaining plain-text passwords |
+| `node scripts/seed-demo-data.mjs [--remove]` | Add or remove demo data |

@@ -7,8 +7,12 @@ import {
 } from "@/lib/bookingMeta";
 import { getBookingAmount, bookingCurrency } from "@/lib/paymentConfig";
 import { enrichBookings, sameClockTime, type BookingRow } from "@/lib/bookingQueries";
-import { sendPaymentPendingSms } from "@/lib/bookingNotifications";
-import { sendBookingReservedEmail } from "@/lib/bookingEmails";
+import {
+  cancelBookingReminders,
+  handleRescheduledBooking,
+  sendPaymentPendingSms,
+} from "@/lib/bookingNotifications";
+import { sendBookingRescheduledEmail, sendBookingReservedEmail } from "@/lib/bookingEmails";
 import { appBaseUrl } from "@/lib/email";
 import {
   canAccessBooking,
@@ -104,7 +108,7 @@ export async function POST(req: Request) {
 
   const { data: doctorRow } = await supabaseAdmin
     .from("doctors")
-    .select("id, hospital_id")
+    .select("id, hospital_id, consultation_fee")
     .eq("id", body.doctor_id)
     .maybeSingle();
 
@@ -117,7 +121,7 @@ export async function POST(req: Request) {
     slotId: body.slot_id,
     status: "booked",
     paymentStatus: "pending",
-    amount: getBookingAmount(kind),
+    amount: getBookingAmount(kind, doctorRow.consultation_fee),
     currency: bookingCurrency,
   });
 
@@ -362,6 +366,21 @@ export async function PUT(req: Request) {
     await supabaseAdmin.from("slots").update({ is_booked: false }).eq("id", prevSlotId);
   }
 
-  const [booking] = await enrichBookings([data as BookingRow]);
+  const timeChanged =
+    data.appointment_date !== current.appointment_date ||
+    !sameClockTime(data.appointment_time, current.appointment_time);
+
+  if (status === "completed") {
+    await cancelBookingReminders(data).catch(() => null);
+  } else if (timeChanged) {
+    const previous = { date: current.appointment_date, time: current.appointment_time };
+    await Promise.all([
+      handleRescheduledBooking(data, previous).catch(() => null),
+      sendBookingRescheduledEmail(data, previous, appBaseUrl(req)).catch(() => null),
+    ]);
+  }
+
+  const { data: fresh } = await supabaseAdmin.from("bookings").select("*").eq("id", id).single();
+  const [booking] = await enrichBookings([(fresh ?? data) as BookingRow]);
   return NextResponse.json(booking, { status: 200 });
 }

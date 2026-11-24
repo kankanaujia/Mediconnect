@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { useRouter } from "next/navigation";
 
 const steps = [
@@ -7,25 +9,25 @@ const steps = [
     number: "01",
     title: "Select Hospital",
     desc: "Choose your preferred healthcare facility from our network",
-    image: "images/process1.jpg",
+    image: "/images/process1.jpg",
   },
   {
     number: "02",
     title: "Select Specialization",
     desc: "Choose the medical field relevant to your health needs",
-    image: "images/process2.jpg",
+    image: "/images/process2.jpg",
   },
   {
     number: "03",
     title: "Review Doctor Profiles",
     desc: "Explore credentials, experience, and hospital affiliations",
-    image: "images/process3.jpg",
+    image: "/images/process3.jpg",
   },
   {
     number: "04",
     title: "Book Your Slot",
     desc: "Pick an available time that fits your schedule",
-    image: "images/process4.webp",
+    image: "/images/process4.webp",
   },
 ];
 
@@ -83,11 +85,13 @@ export default function ProcessSection() {
                   </p>
                 </div>
 
-                <div className="w-[260px] h-[170px] rounded-xl overflow-hidden shadow-md">
-                  <img
+                <div className="relative w-[260px] h-[170px] rounded-xl overflow-hidden shadow-md">
+                  <Image
                     src={step.image}
                     alt={step.title}
-                    className="w-full h-full object-cover"
+                    fill
+                    sizes="260px"
+                    className="object-cover"
                   />
                 </div>
               </div>

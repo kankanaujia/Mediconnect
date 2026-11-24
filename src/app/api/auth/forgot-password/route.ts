@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { accountTables, parseRole } from "@/lib/accounts";
 import { appBaseUrl, emailLayout, sendEmail } from "@/lib/email";
+import { clientIp, hitRateLimit, tooManyAttempts } from "@/lib/rateLimit";
 
 const TOKEN_TTL_MINUTES = 30;
 
@@ -24,6 +25,15 @@ export async function POST(req: Request) {
 
   if (!role || !email) {
     return NextResponse.json({ error: "Role and email are required" }, { status: 400 });
+  }
+
+  // Limit reset emails: 5 per IP and 3 per address every 15 minutes.
+  const wait = Math.max(
+    hitRateLimit(`forgot-ip:${clientIp(req)}`, 5, 15 * 60),
+    hitRateLimit(`forgot:${email.toLowerCase()}`, 3, 15 * 60)
+  );
+  if (wait > 0) {
+    return tooManyAttempts(wait);
   }
 
   const { data: account } = await supabaseAdmin

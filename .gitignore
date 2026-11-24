@@ -42,3 +42,6 @@ next-env.d.ts
 
 # The example file only holds placeholders and is meant to be shared.
 !.env.example
+
+# Local record of demo rows added by scripts/seed-demo-data.mjs
+scripts/.demo-seed.json

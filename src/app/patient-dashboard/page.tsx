@@ -167,6 +167,7 @@ export default function PatientDashboard() {
       address: parsedUser.address || "",
     });
     void loadPatientBookings(parsedUser.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once, after the saved login is read
   }, [router]);
 
   useEffect(() => {

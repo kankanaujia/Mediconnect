@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { CheckCircle } from "lucide-react";
 
 export default function WhyChooseUsSection() {
@@ -46,38 +48,46 @@ export default function WhyChooseUsSection() {
         {/* RIGHT IMAGE GRID */}
         <div className="w-1/2 grid grid-cols-2 gap-6">
           {/* Top Wide */}
-          <div className="col-span-2 h-45 rounded-2xl overflow-hidden shadow-md">
-            <img
-              src="images/why1.png"
+          <div className="relative col-span-2 h-45 rounded-2xl overflow-hidden shadow-md">
+            <Image
+              src="/images/why1.png"
               alt=""
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 25vw"
+              className="object-cover"
             />
           </div>
 
           {/* Middle Left */}
-          <div className="h-35 rounded-2xl overflow-hidden shadow-md">
-            <img
-              src="images/why2.png"
+          <div className="relative h-35 rounded-2xl overflow-hidden shadow-md">
+            <Image
+              src="/images/why2.png"
               alt=""
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 25vw"
+              className="object-cover"
             />
           </div>
 
           {/* Middle Right */}
-          <div className="h-35 rounded-2xl overflow-hidden shadow-md">
-            <img
-              src="images/why3.png"
+          <div className="relative h-35 rounded-2xl overflow-hidden shadow-md">
+            <Image
+              src="/images/why3.png"
               alt=""
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 25vw"
+              className="object-cover"
             />
           </div>
 
           {/* Bottom Wide */}
-          <div className="col-span-2 h-45 rounded-2xl overflow-hidden shadow-md">
-            <img
-              src="images/why4.png"
+          <div className="relative col-span-2 h-45 rounded-2xl overflow-hidden shadow-md">
+            <Image
+              src="/images/why4.png"
               alt=""
-              className="w-full h-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 25vw"
+              className="object-cover"
             />
           </div>
         </div>

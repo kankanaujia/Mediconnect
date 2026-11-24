@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- doctor photos are external URLs entered by doctors, so plain <img> is used */
 
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
@@ -74,9 +75,13 @@ export default function DoctorProfilePage({ params }: { params: Promise<{ id: st
     doctor.qualifications
       ? { icon: GraduationCap, label: "Qualifications", value: doctor.qualifications }
       : null,
-    doctor.consultation_fee !== null
-      ? { icon: IndianRupee, label: "Consultation fee", value: `₹${doctor.consultation_fee}` }
-      : null,
+    {
+      icon: IndianRupee,
+      label: "Fees",
+      value: `Special appointment ₹${
+        doctor.consultation_fee && doctor.consultation_fee > 0 ? doctor.consultation_fee : 700
+      } • Daily slot ₹300`,
+    },
   ].filter(Boolean) as { icon: typeof Stethoscope; label: string; value: string }[];
 
   return (

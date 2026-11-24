@@ -2,37 +2,9 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { shapePatient, type PatientRow } from "@/lib/patientProfile";
-import { isDemoLoginEnabled, setSessionCookie } from "@/lib/session";
+import { setSessionCookie } from "@/lib/session";
+import { clearRateLimit, clientIp, hitRateLimit, tooManyAttempts } from "@/lib/rateLimit";
 import { accountTables, parseRole } from "@/lib/accounts";
-
-const DEMO_PASSWORD = "demo123";
-
-const demoAccounts = {
-  patient: {
-    email: "patient@demo.com",
-    user: {
-      id: "demo-patient",
-      first_name: "Demo",
-      last_name: "Patient",
-      name: "Demo Patient",
-      email: "patient@demo.com",
-      phone: "",
-      location: "",
-      address: "",
-      gender: "",
-      date_of_birth: "",
-    },
-  },
-  doctor: {
-    email: "doctor@demo.com",
-    user: {
-      id: "demo-id",
-      name: "Demo Doctor",
-      email: "doctor@demo.com",
-      specialization: "General",
-    },
-  },
-} as const;
 
 const invalid = () =>
   NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
@@ -55,11 +27,14 @@ export async function POST(req: Request) {
     );
   }
 
-  if (role !== "admin") {
-    const demo = demoAccounts[role];
-    if (isDemoLoginEnabled() && email === demo.email && password === DEMO_PASSWORD) {
-      return setSessionCookie(NextResponse.json(demo.user), role, demo.user.id);
-    }
+  // Slow down password guessing: per account and per IP, 15 minute windows.
+  const accountKey = `login:${role}:${email.toLowerCase()}`;
+  const wait = Math.max(
+    hitRateLimit(accountKey, 8, 15 * 60),
+    hitRateLimit(`login-ip:${clientIp(req)}`, 30, 15 * 60)
+  );
+  if (wait > 0) {
+    return tooManyAttempts(wait);
   }
 
   const table = accountTables[role];
@@ -89,6 +64,8 @@ export async function POST(req: Request) {
       { status: 403 }
     );
   }
+
+  clearRateLimit(accountKey);
 
   if (check.needsRehash) {
     await supabaseAdmin

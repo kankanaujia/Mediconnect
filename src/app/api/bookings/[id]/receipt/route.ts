@@ -51,6 +51,10 @@ export async function GET(
     currency: parsed.meta.currency ?? "INR",
     paymentId: parsed.meta.paymentId,
     bookingType: parsed.meta.kind === "special" ? "Special Appointment" : "Daily Slot",
+    status: parsed.meta.status,
+    refundId: parsed.meta.refundId,
+    refundStatus: parsed.meta.refundStatus,
+    cancelledAt: parsed.meta.cancelledAt,
   });
 
   return new NextResponse(pdf, {

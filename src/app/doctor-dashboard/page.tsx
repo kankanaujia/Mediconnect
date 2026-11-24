@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -117,6 +118,7 @@ export default function DoctorDashboard() {
     setUser(parsed);
     void loadHospitalName(parsed);
     void loadDoctorData(parsed.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once, after the saved login is read
   }, [router]);
 
   async function loadHospitalName(doctor: DoctorUser) {
@@ -180,7 +182,7 @@ export default function DoctorDashboard() {
     [bookings],
   );
 
-  const isSlotBooked = (slot: Slot) =>
+  const isSlotBooked = useCallback((slot: Slot) =>
     activeBookings.some((booking) => {
       if (booking.meta.slotId) {
         return booking.meta.slotId === slot.id;
@@ -193,11 +195,11 @@ export default function DoctorDashboard() {
         booking.appointment_date === dateText &&
         booking.appointment_time.slice(0, 5) === timeText
       );
-    });
+    }), [activeBookings]);
 
   const availableSlots = useMemo(
     () => slots.filter((slot) => !isSlotBooked(slot)),
-    [slots, activeBookings],
+    [slots, isSlotBooked],
   );
 
   const availableSlotDates = useMemo(() => {
