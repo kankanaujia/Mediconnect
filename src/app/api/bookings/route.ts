@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { logPatientAccess } from "@/lib/accessLog";
 import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
 import {
+  appointmentStart,
   bookingFromRow,
   bookingColumns,
   type BookingStatus,
@@ -111,6 +112,17 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const kind = body.kind === "special" ? "special" : "daily";
+
+  if (
+    !body.appointment_date ||
+    !body.appointment_time ||
+    appointmentStart(body.appointment_date, body.appointment_time).getTime() <= Date.now()
+  ) {
+    return NextResponse.json(
+      { error: "Please choose a date and time in the future." },
+      { status: 400 }
+    );
+  }
 
   const { data: doctorRow } = await supabaseAdmin
     .from("doctors")
@@ -287,6 +299,16 @@ export async function PUT(req: Request) {
 
   const nextDate = appointment_date ?? current.appointment_date;
   const nextTime = appointment_time ?? current.appointment_time;
+
+  if (
+    (appointment_date || appointment_time) &&
+    appointmentStart(nextDate, nextTime).getTime() <= Date.now()
+  ) {
+    return NextResponse.json(
+      { error: "Please choose a date and time in the future." },
+      { status: 400 }
+    );
+  }
 
   if (appointment_date || appointment_time || nextSlotId) {
     const { data: sameDoctorData } = await supabaseAdmin

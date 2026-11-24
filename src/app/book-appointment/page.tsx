@@ -53,10 +53,13 @@ async function fetchSpecialAvailability(doctorId: string, date: string) {
     .filter((booking) => booking.appointment_date === date)
     .map((booking) => booking.appointment_time.slice(0, 5));
 
-  return {
-    schedules,
-    times: generateSpecialAppointmentTimes(schedules, date, blockedTimes),
-  };
+  // Today: only times that have not passed yet (India time).
+  const nowIst = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString();
+  const times = generateSpecialAppointmentTimes(schedules, date, blockedTimes).filter(
+    (time) => date > nowIst.slice(0, 10) || time > nowIst.slice(11, 16),
+  );
+
+  return { schedules, times };
 }
 
 export default function BookAppointment() {
@@ -81,6 +84,8 @@ export default function BookAppointment() {
   // Which doctor+date the current availableTimes were loaded for.
   const [loadedAvailabilityKey, setLoadedAvailabilityKey] = useState("");
   const [saving, setSaving] = useState(false);
+  // Earliest date a patient can pick: today in India.
+  const [minDate] = useState(() => new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10));
 
   const availabilityKey =
     selectedDoctorId && selectedDate ? `${selectedDoctorId}|${selectedDate}` : "";
@@ -300,6 +305,7 @@ export default function BookAppointment() {
 
             <input
               type="date"
+              min={minDate}
               value={selectedDate}
               onChange={(e) => {
                 setSelectedDate(e.target.value);

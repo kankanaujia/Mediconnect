@@ -775,7 +775,7 @@ export default function PatientDashboard() {
                         </p>
                         <p className="mt-2 text-sm text-gray-600">
                           {booking.appointment_date} at{" "}
-                          {booking.appointment_time}
+                          {booking.appointment_time.slice(0, 5)}
                         </p>
                         {booking.reason ? (
                           <p className="mt-1 text-sm text-gray-600">
@@ -882,9 +882,15 @@ export default function PatientDashboard() {
                           ) : null}
                         </div>
                         {booking.meta.notifications?.error ? (
-                          <p className="max-w-xs text-xs text-rose-600">
-                            SMS issue: {booking.meta.notifications.error}
-                          </p>
+                          booking.meta.notifications.error.includes("phone number is missing") ? (
+                            <p className="max-w-xs text-xs text-gray-500">
+                              Add your phone number in your profile to get SMS updates.
+                            </p>
+                          ) : (
+                            <p className="max-w-xs text-xs text-rose-600">
+                              SMS could not be sent. You still get updates by email.
+                            </p>
+                          )
                         ) : null}
                       </div>
                     </div>
@@ -1499,6 +1505,7 @@ export default function PatientDashboard() {
                   <ProfileField label="Appointment Date">
                     <input
                       type="date"
+                      min={new Date().toISOString().slice(0, 10)}
                       value={editBookingForm.appointmentDate}
                       onChange={(e) =>
                         setEditBookingForm((prev) => ({
