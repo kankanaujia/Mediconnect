@@ -996,7 +996,7 @@ export default function DoctorDashboard() {
                         </p>
                         <p className="text-sm text-gray-600">
                           {booking.appointment_date} at{" "}
-                          {booking.appointment_time}
+                          {booking.appointment_time.slice(0, 5)}
                         </p>
                         {booking.reason ? (
                           <p className="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded-md">
