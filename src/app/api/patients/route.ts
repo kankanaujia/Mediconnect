@@ -5,9 +5,10 @@ import {
   shapePatient,
   type PatientRow,
 } from "@/lib/patientProfile";
-import { hashPassword } from "@/lib/password";
+import { randomBytes } from "crypto";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { MIN_PASSWORD_LENGTH } from "@/lib/accounts";
-import { getSession, setSessionCookie, unauthorized } from "@/lib/session";
+import { clearSessionCookie, getSession, setSessionCookie, unauthorized } from "@/lib/session";
 
 // Returns the logged-in patient's own profile.
 export async function GET() {
@@ -47,7 +48,15 @@ export async function POST(req: Request) {
       phone,
       location,
       address,
+      consent,
     } = body;
+
+    if (consent !== true) {
+      return NextResponse.json(
+        { error: "Please read and accept the Privacy Policy to create an account" },
+        { status: 400 }
+      );
+    }
 
     const cleanEmail = typeof email === "string" ? email.trim() : "";
     const cleanPassword = typeof password === "string" ? password.trim() : "";
@@ -88,6 +97,7 @@ export async function POST(req: Request) {
           password: hashPassword(cleanPassword),
           phone,
           address: serializedAddress,
+          consent_at: new Date().toISOString(),
         },
       ])
       .select("*")
@@ -161,3 +171,83 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
+
+// Deletes the logged-in patient's account: personal details are erased, and
+// past visits stay with the hospital without anything that identifies the patient.
+// Requires the current password. Upcoming paid appointments must be cancelled first.
+export async function DELETE(req: Request) {
+  const session = await getSession();
+  if (!session || session.role !== "patient") {
+    return unauthorized();
+  }
+
+  const { password } = (await req.json().catch(() => ({}))) as { password?: string };
+  const { data: patient } = await supabaseAdmin
+    .from("patients")
+    .select("id, password")
+    .eq("id", session.id)
+    .maybeSingle();
+
+  if (!patient || !verifyPassword((password ?? "").trim(), patient.password).ok) {
+    return NextResponse.json({ error: "Password is incorrect" }, { status: 403 });
+  }
+
+  const { data: upcoming } = await supabaseAdmin
+    .from("bookings")
+    .select("id")
+    .eq("patient_id", session.id)
+    .eq("status", "booked")
+    .eq("payment_status", "paid");
+
+  if (upcoming && upcoming.length > 0) {
+    return NextResponse.json(
+      {
+        error:
+          "You have upcoming paid appointments. Cancel them first (for a refund), then delete your account.",
+      },
+      { status: 409 }
+    );
+  }
+
+  // Unpaid upcoming bookings are cancelled so their slots open up again.
+  const { data: unpaid } = await supabaseAdmin
+    .from("bookings")
+    .select("id, slot_id")
+    .eq("patient_id", session.id)
+    .eq("status", "booked");
+  if (unpaid?.length) {
+    await supabaseAdmin
+      .from("bookings")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString(), cancelled_by: "patient" })
+      .in("id", unpaid.map((b) => b.id));
+    const slotIds = unpaid.map((b) => b.slot_id).filter(Boolean);
+    if (slotIds.length) {
+      await supabaseAdmin.from("slots").update({ is_booked: false }).in("id", slotIds);
+    }
+  }
+
+  await Promise.all([
+    supabaseAdmin.from("bookings").update({ reason: "" }).eq("patient_id", session.id),
+    supabaseAdmin.from("reviews").update({ comment: null }).eq("patient_id", session.id),
+    supabaseAdmin.from("access_logs").delete().eq("patient_id", session.id),
+  ]);
+
+  const { error } = await supabaseAdmin
+    .from("patients")
+    .update({
+      name: "Deleted user",
+      email: `deleted-${session.id}@deleted.invalid`,
+      phone: null,
+      address: null,
+      password: hashPassword(randomBytes(24).toString("hex")),
+      deleted_at: new Date().toISOString(),
+    })
+    .eq("id", session.id);
+
+  if (error) {
+    return NextResponse.json({ error: "Could not delete the account" }, { status: 500 });
+  }
+
+  return clearSessionCookie(NextResponse.json({ success: true }));
+}
+

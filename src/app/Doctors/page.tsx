@@ -4,7 +4,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { supabase } from "@/lib/supabase";
 import { RatingSummary } from "@/components/StarRating";
 
 type Doctor = {
@@ -36,7 +35,7 @@ export default function DoctorsPage() {
 
     void Promise.all([
       fetch("/api/doctors").then((r) => r.json()),
-      supabase.from("hospitals").select("id, name").order("name"),
+      fetch("/api/hospitals").then((res) => res.json()).then((data) => ({ data: Array.isArray(data) ? data : [] })),
     ]).then(([doctorData, hospitalResult]) => {
       if (cancelled) return;
       setDoctors(Array.isArray(doctorData) ? doctorData : []);
@@ -79,30 +78,30 @@ export default function DoctorsPage() {
 
   return (
     <div className="bg-white">
-      <section className="w-full bg-gradient-to-r from-[#dfe8ee] via-[#d6e3ea] to-[#cfdde6] py-36 pt-48 text-center">
-        <h1 className="text-[64px] font-serif font-extrabold text-gray-800">
+      <section className="w-full bg-gradient-to-r from-[#dfe8ee] via-[#d6e3ea] to-[#cfdde6] px-5 pb-16 pt-28 md:py-36 md:pt-48 text-center">
+        <h1 className="text-4xl md:text-[64px] font-serif font-extrabold text-gray-800">
           Find Your Medical <span className="text-[#80c8f6]">Specialist</span>
         </h1>
-        <p className="mt-6 text-gray-500 font-serif text-lg max-w-3xl mx-auto leading-relaxed">
+        <p className="mt-6 text-gray-500 font-serif text-base md:text-lg max-w-3xl mx-auto leading-relaxed">
           Browse our extensive network of healthcare professionals across various specialties.
         </p>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-10">
+      <section className="mx-auto max-w-6xl px-5 md:px-6 py-10">
         <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_1fr]">
-          <label className="flex items-center gap-2 rounded-lg border px-4 py-3 text-gray-600">
+          <label className="flex min-w-0 items-center gap-2 rounded-lg border px-4 py-3 text-gray-600">
             <Search className="h-4 w-4 text-gray-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by doctor, specialty or hospital"
-              className="w-full outline-none"
+              className="w-full min-w-0 outline-none"
             />
           </label>
           <select
             value={specialization}
             onChange={(e) => setSpecialization(e.target.value)}
-            className="rounded-lg border px-4 py-3 text-gray-600"
+            className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
           >
             <option value="">All specialties</option>
             {specializations.map((s) => (
@@ -114,7 +113,7 @@ export default function DoctorsPage() {
           <select
             value={hospital}
             onChange={(e) => setHospital(e.target.value)}
-            className="rounded-lg border px-4 py-3 text-gray-600"
+            className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
           >
             <option value="">All hospitals</option>
             {hospitals.map((h) => (
@@ -126,7 +125,7 @@ export default function DoctorsPage() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="rounded-lg border px-4 py-3 text-gray-600"
+            className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
           >
             <option value="name">Sort: Name</option>
             <option value="rating">Sort: Top rated</option>
@@ -153,7 +152,7 @@ export default function DoctorsPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-16">
+      <section className="mx-auto max-w-6xl px-5 md:px-6 pb-16">
         {loaded && visible.length === 0 ? (
           <p className="rounded-xl border p-8 text-center text-gray-500">
             No doctors match your search. Try a different specialty or hospital.

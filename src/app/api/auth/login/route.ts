@@ -59,10 +59,31 @@ export async function POST(req: Request) {
       {
         error: data.rejected_at
           ? "Your doctor account was not approved. Please contact the hospital administrator."
-          : "Your doctor account is waiting for admin approval. You can log in once it is approved.",
+          : "Your doctor account is waiting for approval by the hospital or MediConnect. You can log in once it is approved.",
       },
       { status: 403 }
     );
+  }
+
+  let hospitalId: string | undefined;
+  if (role === "hospital") {
+    const { data: hospital } = await supabaseAdmin
+      .from("hospitals")
+      .select("id, name, approved, rejected_at")
+      .eq("id", data.hospital_id)
+      .maybeSingle();
+    if (!hospital || hospital.approved !== true) {
+      return NextResponse.json(
+        {
+          error: hospital?.rejected_at
+            ? "This hospital's registration was not approved. Please contact MediConnect."
+            : "Your hospital is waiting for MediConnect approval. You can log in once it is approved.",
+        },
+        { status: 403 }
+      );
+    }
+    hospitalId = hospital.id;
+    data.hospital_name = hospital.name;
   }
 
   clearRateLimit(accountKey);
@@ -78,5 +99,5 @@ export async function POST(req: Request) {
   delete account.password;
   const user = role === "patient" ? shapePatient(data as PatientRow) : account;
 
-  return setSessionCookie(NextResponse.json(user, { status: 200 }), role, data.id);
+  return setSessionCookie(NextResponse.json(user, { status: 200 }), role, data.id, hospitalId);
 }

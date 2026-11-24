@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
-import { getSession, unauthorized } from "@/lib/session";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requestChange } from "@/lib/requestRoute";
 import {
   parseScheduleEntry,
   sortSchedules,
@@ -43,103 +43,42 @@ export async function GET(req: Request) {
   return NextResponse.json(sortSchedules(schedules));
 }
 
+// Doctors' changes are requests that their hospital approves (see lib/doctorRequests.ts).
+
+function schedulePayload(body: Record<string, unknown>) {
+  return {
+    dayOfWeek: Number(body.dayOfWeek),
+    title: body.title ?? "Other",
+    startTime: body.startTime,
+    endTime: body.endTime,
+    notes: body.notes ?? "",
+  };
+}
+
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "doctor") {
-    return unauthorized("Please log in as a doctor.");
-  }
-
-  const body = (await req.json()) as ScheduleEntry & { doctor_id: string };
-
-  const { data, error } = await supabaseAdmin
-    .from("doctor_schedules")
-    .insert([
-      {
-        doctor_id: session.id,
-        day_of_week: body.dayOfWeek,
-        title: body.title,
-        start_time: body.startTime,
-        end_time: body.endTime,
-        notes: body.notes ?? "",
-      },
-    ])
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json(
-      {
-        error:
-          error?.code === "42501" && !isUsingServiceRole()
-            ? "Schedule creation is blocked by Supabase RLS. Add SUPABASE_SERVICE_ROLE_KEY to server env."
-            : error?.message || "Failed to create schedule entry",
-      },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json(parseScheduleEntry(data as ScheduleRow), { status: 200 });
+  return requestChange(
+    "add_schedule",
+    (body) =>
+      body.startTime && body.endTime ? schedulePayload(body) : "Start and end time are required",
+    req
+  );
 }
 
 export async function PUT(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "doctor") {
-    return unauthorized("Please log in as a doctor.");
-  }
-
-  const body = (await req.json()) as ScheduleEntry;
-
-  if (!body.id) {
-    return NextResponse.json(
-      { error: "Schedule id is required" },
-      { status: 400 }
-    );
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from("doctor_schedules")
-    .update({
-      day_of_week: body.dayOfWeek,
-      title: body.title,
-      start_time: body.startTime,
-      end_time: body.endTime,
-      notes: body.notes ?? "",
-    })
-    .eq("id", body.id)
-    .eq("doctor_id", session.id)
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json(
-      { error: "Failed to update schedule entry" },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json(parseScheduleEntry(data as ScheduleRow), { status: 200 });
+  return requestChange(
+    "update_schedule",
+    (body) =>
+      body.id && body.startTime && body.endTime
+        ? { id: body.id, ...schedulePayload(body) }
+        : "Schedule id, start and end time are required",
+    req
+  );
 }
 
 export async function DELETE(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "doctor") {
-    return unauthorized("Please log in as a doctor.");
-  }
-
-  const { id } = await req.json();
-
-  const { error } = await supabaseAdmin
-    .from("doctor_schedules")
-    .delete()
-    .eq("id", id)
-    .eq("doctor_id", session.id);
-
-  if (error) {
-    return NextResponse.json(
-      { error: "Failed to delete schedule entry" },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({ success: true }, { status: 200 });
+  return requestChange(
+    "delete_schedule",
+    (body) => (body.id ? { id: body.id, label: body.label ?? "" } : "Schedule id is required"),
+    req
+  );
 }

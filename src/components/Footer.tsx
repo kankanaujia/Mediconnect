@@ -7,7 +7,7 @@ import { Phone, Mail, MapPin } from "lucide-react";
 export default function Footer() {
   const router = useRouter();
   return (
-    <footer className="relative bg-linear-to-b from-gray-900 to-gray-800 pt-20 px-10">
+    <footer className="relative bg-linear-to-b from-gray-900 to-gray-800 pt-14 md:pt-20 px-5 md:px-10">
       
       {/* Overlay blur for glass feel */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent)] pointer-events-none" />
@@ -40,6 +40,8 @@ export default function Footer() {
               { label: "Hospitals", href: "/Hospitals" },
               { label: "Find Doctors", href: "/Doctors" },
               { label: "Doctor Sign Up", href: "/Doctor_signup" },
+              { label: "For Hospitals", href: "/hospital/login" },
+              { label: "Privacy Policy", href: "/privacy" },
               { label: "Admin", href: "/admin/login" },
             ].map((link) => (
               <li key={link.href}>

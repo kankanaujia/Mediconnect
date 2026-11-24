@@ -4,10 +4,10 @@ import Link from "next/link";
 
 export default function FinalCTASection() {
   return (
-    <section className="w-full bg-white py-40 text-center">
+    <section className="w-full bg-white py-20 md:py-40 text-center">
       <div className="max-w-3xl mx-auto px-6">
         {/* HEADING */}
-        <h2 className="text-[62px] font-serif font-extrabold text-gray-800 leading-tight">
+        <h2 className="text-4xl md:text-[62px] font-serif font-extrabold text-gray-800 leading-tight">
           Ready to Prioritize
           <br />
           Your Health?
@@ -20,7 +20,7 @@ export default function FinalCTASection() {
         </p>
 
         {/* BUTTONS */}
-        <div className="mt-10 flex justify-center gap-6">
+        <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4 sm:gap-6">
           {/* PRIMARY */}
           <Link href="/Doctors">
             <button className="px-8 py-4 bg-gray-800 text-white font-serif rounded-md font-medium hover:bg-gray-900 transition cursor-pointer">

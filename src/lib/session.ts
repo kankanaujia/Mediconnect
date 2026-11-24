@@ -2,13 +2,15 @@ import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
-export type SessionRole = "patient" | "doctor" | "admin";
-export const SESSION_ROLES: SessionRole[] = ["patient", "doctor", "admin"];
+export type SessionRole = "patient" | "doctor" | "admin" | "hospital";
+export const SESSION_ROLES: SessionRole[] = ["patient", "doctor", "admin", "hospital"];
 
 export type Session = {
   role: SessionRole;
   id: string;
   exp: number;
+  /** For hospital staff: the hospital they manage. */
+  hid?: string;
 };
 
 export const SESSION_COOKIE = "mc_session";
@@ -37,11 +39,12 @@ function sign(payload: string) {
   return createHmac("sha256", getSecret()).update(payload).digest("base64url");
 }
 
-export function createSessionToken(role: SessionRole, id: string) {
+export function createSessionToken(role: SessionRole, id: string, hid?: string) {
   const session: Session = {
     role,
     id,
     exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
+    ...(hid ? { hid } : {}),
   };
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
   return `${payload}.${sign(payload)}`;
@@ -74,8 +77,8 @@ export function readSessionToken(token: string | undefined): Session | null {
   }
 }
 
-export function setSessionCookie(res: NextResponse, role: SessionRole, id: string) {
-  res.cookies.set(SESSION_COOKIE, createSessionToken(role, id), {
+export function setSessionCookie(res: NextResponse, role: SessionRole, id: string, hid?: string) {
+  res.cookies.set(SESSION_COOKIE, createSessionToken(role, id, hid), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -103,13 +106,14 @@ export function forbidden(message = "You do not have access to this resource.") 
   return NextResponse.json({ error: message }, { status: 403 });
 }
 
-/** True for the booking's patient, its doctor, or an admin. */
+/** True for the booking's patient, its doctor, its hospital's staff, or an admin. */
 export function canAccessBooking(
   session: Session,
-  booking: { patient_id: string; doctor_id: string }
+  booking: { patient_id: string; doctor_id: string; hospital_id?: string | null }
 ) {
   return (
     session.role === "admin" ||
+    (session.role === "hospital" && !!session.hid && booking.hospital_id === session.hid) ||
     (session.role === "patient" && booking.patient_id === session.id) ||
     (session.role === "doctor" && booking.doctor_id === session.id)
   );

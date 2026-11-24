@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import { UserRound, X } from "lucide-react";
 import { StarInput, Stars } from "@/components/StarRating";
+import PrivacyPanel from "@/components/patient/PrivacyPanel";
 import { supabase } from "@/lib/supabase";
 import { launchRazorpayCheckout } from "@/lib/razorpayClient";
 import {
@@ -323,7 +324,7 @@ export default function PatientDashboard() {
 
   async function loadPickerData() {
     const [hospitalResult, doctorResult] = await Promise.all([
-      supabase.from("hospitals").select("id, name, location").order("name"),
+      fetch("/api/hospitals").then((res) => res.json()).then((data) => ({ data: Array.isArray(data) ? data : [] })),
       supabase
         .from("doctors")
         .select("id, name, specialization, hospital_id")
@@ -711,8 +712,8 @@ export default function PatientDashboard() {
   if (!mounted || !user) return null;
 
   return (
-    <div className="relative min-h-screen bg-[#f6f9fc] px-6 pb-16 pt-28 md:px-20">
-      <div className="mb-12 flex items-center justify-between">
+    <div className="relative min-h-screen bg-[#f6f9fc] px-4 pb-16 pt-24 sm:px-6 md:px-20 md:pt-28">
+      <div className="mb-12 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-bold text-gray-800">Dashboard</h1>
           <p className="mt-2 text-gray-500">Welcome {displayName}<br/>
@@ -1013,6 +1014,7 @@ export default function PatientDashboard() {
               </div>
             ) : null}
           </div>
+          <PrivacyPanel />
         </div>
 
         <div className="space-y-8">

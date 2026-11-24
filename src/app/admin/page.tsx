@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import RequestsList, { type DoctorRequest } from "@/components/panel/RequestsList";
 
 type Stats = {
   patients: number;
@@ -30,8 +31,13 @@ type Hospital = {
   id: string;
   name: string;
   location: string | null;
+  address: string | null;
   phone_number: string | null;
+  email: string | null;
+  registration_number: string | null;
+  status: "approved" | "pending" | "rejected";
   doctor_count: number;
+  staff: { name: string; email: string }[];
 };
 
 type Booking = {
@@ -49,11 +55,12 @@ type Booking = {
   };
 };
 
-type Tab = "overview" | "requests" | "doctors" | "hospitals" | "bookings";
+type Tab = "overview" | "requests" | "changes" | "doctors" | "hospitals" | "bookings";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "requests", label: "Doctor Requests" },
+  { id: "requests", label: "New Doctors" },
+  { id: "changes", label: "Schedule Requests" },
   { id: "doctors", label: "Doctors" },
   { id: "hospitals", label: "Hospitals" },
   { id: "bookings", label: "Bookings" },
@@ -95,6 +102,7 @@ export default function AdminDashboardPage() {
   const [bookingFilter, setBookingFilter] = useState("all");
   const [hospitalForm, setHospitalForm] = useState({ name: "", location: "", phone_number: "" });
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [changeRequests, setChangeRequests] = useState<DoctorRequest[]>([]);
 
   const loadAll = useCallback(async () => {
     const [statsRes, doctorsRes, hospitalsRes, bookingsRes] = await Promise.all([
@@ -103,6 +111,7 @@ export default function AdminDashboardPage() {
       fetch("/api/admin/hospitals"),
       fetch("/api/admin/bookings"),
     ]);
+    const changesRes = await fetch("/api/doctor-requests");
 
     if (statsRes.status === 401) {
       router.replace("/admin/login");
@@ -119,7 +128,33 @@ export default function AdminDashboardPage() {
     setDoctors(Array.isArray(d) ? d : []);
     setHospitals(Array.isArray(h) ? h : []);
     setBookings(Array.isArray(b) ? b : []);
+    const c = await changesRes.json().catch(() => []);
+    setChangeRequests(Array.isArray(c) ? c : []);
   }, [router]);
+
+  const decideChange = async (id: string, action: "approve" | "reject", note: string) => {
+    const res = await fetch(`/api/doctor-requests/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, note }),
+    });
+    const data = await res.json();
+    if (!res.ok) alert(data.error || "Could not update the request");
+    await loadAll();
+  };
+
+  const reviewHospital = async (id: string, action: "approve" | "reject") => {
+    setBusyId(id);
+    const res = await fetch("/api/admin/hospitals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action }),
+    });
+    const data = await res.json();
+    setBusyId(null);
+    if (!res.ok) alert(data.error || "Could not update the hospital");
+    await loadAll();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -210,29 +245,53 @@ export default function AdminDashboardPage() {
           </button>
         </div>
 
-        <div className="mt-8 flex flex-wrap gap-2 border-b border-gray-200">
+        <div className="mt-8 flex gap-1 overflow-x-auto border-b border-gray-200">
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+              className={`-mb-px shrink-0 border-b-2 px-4 py-2 text-sm font-medium transition ${
                 tab === t.id
                   ? "border-gray-900 text-gray-900"
                   : "border-transparent text-gray-500 hover:text-gray-800"
               }`}
             >
               {t.label}
-              {t.id === "requests" && pending.length > 0 ? (
-                <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
-                  {pending.length}
-                </span>
-              ) : null}
+              {(() => {
+                const count =
+                  t.id === "requests"
+                    ? pending.length
+                    : t.id === "changes"
+                      ? changeRequests.filter((r) => r.status === "pending").length
+                      : t.id === "hospitals"
+                        ? hospitals.filter((h) => h.status === "pending").length
+                        : 0;
+                return count > 0 ? (
+                  <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">{count}</span>
+                ) : null;
+              })()}
             </button>
           ))}
         </div>
 
         {!stats ? (
           <p className="mt-10 text-gray-500">Loading...</p>
+        ) : null}
+
+        {stats && tab === "overview" ? (
+          <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl border bg-white p-4 text-sm text-gray-600 shadow-sm">
+            <span>Doctors get today&apos;s appointment list every morning at 8:00 (after deploy).</span>
+            <button
+              onClick={async () => {
+                const res = await fetch("/api/cron/doctor-agenda");
+                const data = await res.json();
+                alert(res.ok ? `Sent today's agenda to ${data.doctors} doctor(s) (${data.appointments} appointments).` : data.error);
+              }}
+              className="rounded-lg border border-gray-300 px-3 py-1.5 text-gray-700 hover:bg-gray-50"
+            >
+              Send today&apos;s agendas now
+            </button>
+          </div>
         ) : null}
 
         {stats && tab === "overview" ? (
@@ -297,6 +356,15 @@ export default function AdminDashboardPage() {
                 </div>
               ))
             )}
+          </div>
+        ) : null}
+
+        {stats && tab === "changes" ? (
+          <div className="mt-8 space-y-4">
+            <p className="text-sm text-gray-500">
+              Schedule and slot changes doctors asked for. Hospitals with their own account approve these themselves; you can approve any of them.
+            </p>
+            <RequestsList requests={changeRequests} mode="decide" showHospital onDecide={decideChange} />
           </div>
         ) : null}
 
@@ -391,15 +459,41 @@ export default function AdminDashboardPage() {
             </form>
             <div className="space-y-3 lg:col-span-2">
               {hospitals.map((h) => (
-                <div key={h.id} className="flex items-center justify-between rounded-xl border bg-white p-4 shadow-sm">
-                  <div>
+                <div key={h.id} className="flex flex-col gap-3 rounded-xl border bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 text-sm text-gray-500">
                     <p className="font-semibold text-gray-900">{h.name}</p>
-                    <p className="text-sm text-gray-500">
+                    <p>
                       {h.location}
                       {h.phone_number ? ` • ${h.phone_number}` : ""}
+                      {h.registration_number ? ` • Reg. ${h.registration_number}` : ""}
                     </p>
+                    {h.address ? <p>{h.address}</p> : null}
+                    {h.staff.length ? (
+                      <p className="truncate">Staff: {h.staff.map((s) => `${s.name} (${s.email})`).join(", ")}</p>
+                    ) : null}
                   </div>
-                  <span className="text-sm text-gray-600">{h.doctor_count} doctors</span>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <span className="text-sm text-gray-600">{h.doctor_count} doctors</span>
+                    <Badge value={h.status} />
+                    {h.status !== "approved" ? (
+                      <button
+                        disabled={busyId === h.id}
+                        onClick={() => void reviewHospital(h.id, "approve")}
+                        className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-60"
+                      >
+                        Approve
+                      </button>
+                    ) : null}
+                    {h.status === "pending" ? (
+                      <button
+                        disabled={busyId === h.id}
+                        onClick={() => void reviewHospital(h.id, "reject")}
+                        className="rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        Reject
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

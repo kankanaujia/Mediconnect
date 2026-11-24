@@ -163,7 +163,7 @@ export async function cancelBookingReminders(booking: BookingRow) {
 /** After a cancellation: stop pending reminders and tell the patient (with refund info). */
 export async function sendCancellationSms(
   booking: BookingRow,
-  options: { refunded: boolean; cancelledBy: "patient" | "doctor" | "admin" }
+  options: { refunded: boolean; cancelledBy: "patient" | "doctor" | "admin" | "hospital" }
 ) {
   const meta = bookingFromRow(booking).meta;
   await cancelScheduledMessages((meta.notifications?.reminders ?? []).map((r) => r.sid));
@@ -171,7 +171,14 @@ export async function sendCancellationSms(
   const { patient, doctorName } = await loadPeople(booking);
   if (!patient?.phone) return;
 
-  const by = options.cancelledBy === "patient" ? "" : options.cancelledBy === "doctor" ? " by the doctor" : " by MediConnect";
+  const by =
+    options.cancelledBy === "patient"
+      ? ""
+      : options.cancelledBy === "doctor"
+        ? " by the doctor"
+        : options.cancelledBy === "hospital"
+          ? " by the hospital"
+          : " by MediConnect";
   const refund = options.refunded
     ? ` A full refund of ${rupees(meta.amount)} has been started.`
     : " No payment was taken.";

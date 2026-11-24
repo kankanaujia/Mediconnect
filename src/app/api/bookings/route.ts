@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logPatientAccess } from "@/lib/accessLog";
 import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
 import {
   bookingFromRow,
@@ -81,6 +82,11 @@ export async function GET(req: Request) {
 
   const rows = (data ?? []) as BookingRow[];
   const own = rows.filter((row) => canAccessBooking(session, row));
+  await logPatientAccess(
+    session,
+    own.map((row) => ({ patientId: row.patient_id, bookingId: row.id })),
+    "Viewed appointment details"
+  );
 
   // Any logged-in user can check a doctor's calendar, but bookings the caller
   // is not part of come back without patient details.

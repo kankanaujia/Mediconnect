@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
-import { getSession, unauthorized } from "@/lib/session";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { requestChange } from "@/lib/requestRoute";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -21,92 +21,34 @@ export async function GET(req: Request) {
   return NextResponse.json(data ?? [], { status: 200 });
 }
 
+// Doctors' changes are requests that their hospital approves (see lib/doctorRequests.ts).
+
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "doctor") {
-    return unauthorized("Please log in as a doctor.");
-  }
-
-  const body = await req.json();
-
-  const { data, error } = await supabaseAdmin
-    .from("slots")
-    .insert([
-      {
-        doctor_id: session.id,
-        date: body.date,
-        duration: body.duration,
-        location: body.location,
-      },
-    ])
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json(
-      {
-        error:
-          error?.code === "42501" && !isUsingServiceRole()
-            ? "Slot creation is blocked by Supabase RLS. Add SUPABASE_SERVICE_ROLE_KEY to server env."
-            : error?.message || "Failed to create slot",
-      },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json(data, { status: 200 });
+  return requestChange(
+    "add_slot",
+    (body) =>
+      body.date
+        ? { date: body.date, duration: Number(body.duration) || 20, location: body.location ?? "" }
+        : "Choose a date and time for the slot",
+    req
+  );
 }
 
 export async function PUT(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "doctor") {
-    return unauthorized("Please log in as a doctor.");
-  }
-
-  const body = await req.json();
-
-  const { data, error } = await supabaseAdmin
-    .from("slots")
-    .update({
-      date: body.date,
-      duration: body.duration,
-      location: body.location,
-    })
-    .eq("id", body.id)
-    .eq("doctor_id", session.id)
-    .select("*")
-    .single();
-
-  if (error || !data) {
-    return NextResponse.json(
-      { error: "Failed to update slot" },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json(data, { status: 200 });
+  return requestChange(
+    "update_slot",
+    (body) =>
+      body.id && body.date
+        ? { id: body.id, date: body.date, duration: Number(body.duration) || 20, location: body.location ?? "" }
+        : "Slot id and date are required",
+    req
+  );
 }
 
 export async function DELETE(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "doctor") {
-    return unauthorized("Please log in as a doctor.");
-  }
-
-  const { id } = await req.json();
-
-  const { error } = await supabaseAdmin
-    .from("slots")
-    .delete()
-    .eq("id", id)
-    .eq("doctor_id", session.id);
-
-  if (error) {
-    return NextResponse.json(
-      { error: "Failed to delete slot" },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({ success: true }, { status: 200 });
+  return requestChange(
+    "delete_slot",
+    (body) => (body.id ? { id: body.id, label: body.label ?? "" } : "Slot id is required"),
+    req
+  );
 }

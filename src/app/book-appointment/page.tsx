@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import {
   generateSpecialAppointmentTimes,
   type ScheduleEntry,
@@ -127,7 +126,7 @@ export default function BookAppointment() {
     let cancelled = false;
 
     void Promise.all([
-      supabase.from("hospitals").select("id, name, location").order("name"),
+      fetch("/api/hospitals").then((res) => res.json()).then((data) => ({ data: Array.isArray(data) ? data : [] })),
       fetch("/api/doctors").then((res) => res.json()),
     ]).then(([hospitalResult, doctorData]) => {
       if (cancelled) return;
@@ -225,7 +224,7 @@ export default function BookAppointment() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f9fafb] px-6 pb-20 pt-28 lg:px-24">
+    <div className="min-h-screen bg-[#f9fafb] px-4 pb-20 pt-24 sm:px-6 md:pt-28 lg:px-24">
       <button
         onClick={() => router.push("/patient-dashboard")}
         className="mb-6 text-sm text-blue-500"
@@ -234,7 +233,7 @@ export default function BookAppointment() {
       </button>
 
       <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-[28px] bg-white p-6 shadow-sm sm:p-8">
+        <section className="min-w-0 rounded-[28px] bg-white p-5 shadow-sm sm:p-8">
           <h1 className="font-serif text-4xl font-semibold text-gray-900">
             Special Appointment
           </h1>
@@ -254,7 +253,7 @@ export default function BookAppointment() {
                 setSelectedTime("");
                 setAvailableTimes([]);
               }}
-              className="rounded-2xl border border-gray-200 p-2 text-gray-800"
+              className="w-full min-w-0 rounded-2xl border border-gray-200 p-2 text-gray-800"
             >
               <option value="">Select Hospital</option>
               {hospitals.map((hospital) => (
@@ -272,7 +271,7 @@ export default function BookAppointment() {
                 setSelectedTime("");
                 setAvailableTimes([]);
               }}
-              className="rounded-2xl border border-gray-200 p-4 text-gray-800"
+              className="w-full min-w-0 rounded-2xl border border-gray-200 p-4 text-gray-800"
             >
               <option value="">Select Specialist</option>
               {specializations.map((specialization) => (
@@ -289,7 +288,7 @@ export default function BookAppointment() {
                 setSelectedTime("");
                 setAvailableTimes([]);
               }}
-              className="rounded-2xl border border-gray-200 p-4"
+              className="w-full min-w-0 rounded-2xl border border-gray-200 p-4"
             >
               <option value="">Select Doctor</option>
               {filteredDoctors.map((doctor) => (
@@ -307,7 +306,7 @@ export default function BookAppointment() {
                 setSelectedTime("");
                 setAvailableTimes([]);
               }}
-              className="rounded-2xl border text-gray-800 border-gray-200 p-4"
+              className="w-full min-w-0 rounded-2xl border text-gray-800 border-gray-200 p-4"
             />
           </div>
 
@@ -350,7 +349,7 @@ export default function BookAppointment() {
           </div>
         </section>
 
-        <aside className="rounded-[28px] bg-[#111111] p-6 text-white shadow-sm sm:p-8">
+        <aside className="min-w-0 rounded-[28px] bg-[#111111] p-5 text-white shadow-sm sm:p-8">
           <h2 className="font-serif text-3xl font-semibold">Booking Summary</h2>
           <div className="mt-6 space-y-4 text-sm text-white/80">
             <p>

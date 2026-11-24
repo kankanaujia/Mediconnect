@@ -23,7 +23,7 @@ export default function Services() {
   ];
 
   return (
-    <section className="px-10 py-20 bg-white">
+    <section className="px-5 md:px-10 py-14 md:py-20 bg-white">
       
       {/* Top Section */}
       <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-10">
@@ -33,7 +33,7 @@ export default function Services() {
           <p className="text-sm font-serif tracking-widest text-gray-400 uppercase">
             Our Services
           </p>
-          <h2 className="text-5xl font-serif font-bold text-gray-800 mt-2 leading-tight">
+          <h2 className="text-3xl md:text-5xl font-serif font-bold text-gray-800 mt-2 leading-tight">
             Comprehensive Medical <br /> Ecosystem
           </h2>
         </div>
@@ -53,7 +53,7 @@ export default function Services() {
         {services.map((item, index) => (
           <div
             key={index}
-            className="p-10 border-r border-gray-200 last:border-r-0 hover:bg-gray-50 transition-all duration-300"
+            className="p-6 md:p-10 border-b md:border-b-0 md:border-r border-gray-200 last:border-b-0 md:last:border-r-0 hover:bg-gray-50 transition-all duration-300"
           >
             {/* Icon */}
             <div className="w-14 h-14 flex items-center justify-center rounded-full bg-gray-100 mb-6 text-xl">

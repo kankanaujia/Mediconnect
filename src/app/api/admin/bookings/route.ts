@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logPatientAccess } from "@/lib/accessLog";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
 import { enrichBookings, type BookingRow } from "@/lib/bookingQueries";
@@ -21,7 +22,13 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const bookings = await enrichBookings((data ?? []) as BookingRow[]);
+  const rows = (data ?? []) as BookingRow[];
+  await logPatientAccess(
+    auth.session,
+    rows.map((row) => ({ patientId: row.patient_id, bookingId: row.id })),
+    "Viewed appointment list (admin)"
+  );
+  const bookings = await enrichBookings(rows);
   return NextResponse.json(
     status === "all" ? bookings : bookings.filter((b) => b.meta.status === status)
   );

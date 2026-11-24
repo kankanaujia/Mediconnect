@@ -44,13 +44,13 @@ export default function Specialties() {
   ];
 
   return (
-    <section className="px-10 py-20 bg-gray-50">
+    <section className="px-5 md:px-10 py-14 md:py-20 bg-gray-50">
       {/* Heading */}
       <div className="mb-12">
         <p className="text-sm font-serif tracking-widest text-gray-400 uppercase">
           Medical Specialties
         </p>
-        <h2 className="text-5xl font-serif font-bold text-gray-800 mt-2">
+        <h2 className="text-3xl md:text-5xl font-serif font-bold text-gray-800 mt-2">
           Explore Our Specializations
         </h2>
       </div>

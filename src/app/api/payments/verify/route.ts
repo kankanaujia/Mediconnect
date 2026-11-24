@@ -5,6 +5,7 @@ import { bookingFromRow, bookingColumns } from "@/lib/bookingMeta";
 import { sendNotificationsForBooking } from "@/lib/bookingNotifications";
 import { refundPayment } from "@/lib/razorpayServer";
 import { sendBookingConfirmedEmail } from "@/lib/bookingEmails";
+import { sendDoctorNewBookingAlert } from "@/lib/doctorAlerts";
 import { appBaseUrl } from "@/lib/email";
 import { forbidden, getSession, unauthorized } from "@/lib/session";
 
@@ -131,7 +132,10 @@ export async function POST(req: Request) {
     );
   }
 
-  await sendBookingConfirmedEmail(updated, appBaseUrl(req));
+  await Promise.all([
+    sendBookingConfirmedEmail(updated, appBaseUrl(req)).catch(() => null),
+    sendDoctorNewBookingAlert(updated, appBaseUrl(req)).catch(() => null),
+  ]);
 
   return NextResponse.json(
     {

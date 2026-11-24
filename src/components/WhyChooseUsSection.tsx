@@ -14,9 +14,9 @@ export default function WhyChooseUsSection() {
 
   return (
     <section className="w-full bg-[#eaf2f6] py-20">
-      <div className="max-w-7xl mx-auto px-10 flex items-center gap-16">
+      <div className="max-w-7xl mx-auto px-5 md:px-10 flex flex-col md:flex-row items-center gap-10 md:gap-16">
         {/* LEFT CONTENT */}
-        <div className="w-1/2">
+        <div className="w-full md:w-1/2">
           {/* Label */}
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm">
@@ -28,12 +28,12 @@ export default function WhyChooseUsSection() {
           </div>
 
           {/* Heading */}
-          <h2 className="text-[52px] font-serif font-extrabold leading-tight text-gray-800">
+          <h2 className="text-4xl md:text-[52px] font-serif font-extrabold leading-tight text-gray-800">
             A Centralized System <br /> Designed for You
           </h2>
 
           {/* Features */}
-          <div className="grid grid-cols-2 gap-x-12 gap-y-8 mt-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6 md:gap-y-8 mt-10">
             {features.map((item, index) => (
               <div key={index} className="flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-[#8fb4c9] mt-1" />
@@ -46,7 +46,7 @@ export default function WhyChooseUsSection() {
         </div>
 
         {/* RIGHT IMAGE GRID */}
-        <div className="w-1/2 grid grid-cols-2 gap-6">
+        <div className="w-full md:w-1/2 grid grid-cols-2 gap-4 md:gap-6">
           {/* Top Wide */}
           <div className="relative col-span-2 h-45 rounded-2xl overflow-hidden shadow-md">
             <Image

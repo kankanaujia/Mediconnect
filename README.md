@@ -10,21 +10,30 @@ Built with Next.js 16 (App Router), React 19, Tailwind CSS 4 and Supabase (Postg
 - Sign up, log in, reset a forgotten password by email, edit their profile
 - Browse all doctors with search, specialty/hospital filters and sorting by rating or experience
 - Doctor profile pages with qualifications, fee, bio and patient reviews
-- Book a **daily slot** (₹300) the doctor has opened, or a **special appointment** (₹700) at any free time in the doctor's schedule
-- Pay through Razorpay, get a confirmation email and SMS, download a PDF receipt
+- Book a **daily slot** (₹300) the doctor has opened, or a **special appointment** (the doctor's fee, ₹700 by default) at any free time in the doctor's schedule
+- Pay through Razorpay, get email and SMS at every step (reserved, paid, rescheduled, cancelled), download a PDF receipt
 - Reschedule, or cancel up to 2 hours before for a full automatic refund
 - Rate and review the doctor after a completed appointment
+- Privacy: consent at sign-up, see **who viewed their details**, download all their data, delete their account
 
 **Doctors**
-- Sign up in the app; the account is activated after an admin approves it
+- Sign up in the app; the account is activated after their hospital (or an admin) approves it
 - Edit their public profile (qualifications, experience, fee, photo, bio)
-- Set a weekly schedule and create daily slots, one at a time or a week at once
+- **Request** changes to their weekly schedule and daily slots; the change applies once the hospital approves it
 - See appointments as a list or a weekly calendar, mark them completed or cancel them (the patient is refunded)
+- Get an email/SMS for every new booking and a morning list of the day's appointments
+
+**Hospitals** (`/hospital`)
+- Register the hospital; it goes live after MediConnect approves it
+- Approve doctors who join, approve or reject doctors' schedule requests
+- See and cancel appointments, today's numbers, revenue and a 7-day chart; edit contact details
 
 **Admins** (`/admin`)
-- Overview: patients, doctors, bookings, revenue
-- Approve or reject doctor sign-ups (the doctor is emailed)
+- Overview: patients, doctors, bookings, revenue; send today's doctor agendas
+- Approve hospitals and doctors; approve schedule requests for hospitals without their own account
 - Add hospitals, see all doctors and all bookings, cancel a booking with refund
+
+The whole site works on phones (responsive layout with a mobile menu).
 
 ## Project layout
 
@@ -90,6 +99,9 @@ tests/                       Unit tests (Vitest)
    | `supabase/migrations/001_lock_down.sql` | Stops the browser's anon key from reading private tables |
    | `supabase/migrations/002_features.sql` | Password reset, admins, doctor profile fields, reviews |
    | `supabase/migrations/003_booking_columns.sql` | Booking status/payment columns and the no-double-booking rule |
+   | `supabase/migrations/004_hospitals_and_requests.sql` | Hospital accounts, approval and doctor change requests |
+   | `supabase/migrations/005_patient_privacy.sql` | Consent, access log and account deletion |
+   | `supabase/migrations/006_remove_old_read_policies.sql` | Removes old "everyone can read" policies so pending hospitals/doctors stay hidden |
 
 4. Create the first admin account (you will be asked for a password):
 
@@ -127,7 +139,10 @@ It only fills in what is missing and never overwrites existing data. It creates 
 ## Rules worth knowing
 
 - Login happens on the server and sets a signed, HttpOnly `mc_session` cookie. Passwords are scrypt-hashed and never sent to the browser. Old plain-text passwords are hashed on next login (or all at once with `node scripts/hash-legacy-passwords.mjs --apply`).
-- Every API route checks the session: patients see only their own data, doctors only their own appointments and slots, admins everything.
+- Every API route checks the session: patients see only their own data, doctors only their own appointments, hospital staff only their hospital, admins everything.
+- Doctors never change slots or schedules directly: each change is a request (`doctor_requests`) applied only when the hospital or an admin approves it.
+- Every time a doctor, hospital or admin opens a patient's details it is written to `access_logs`, which the patient can see.
+- The doctor morning agenda runs at 08:00 IST through Vercel Cron (`vercel.json`); set `CRON_SECRET` in Vercel.
 - Payment status is set only by the server after verifying Razorpay's signature and order.
 - Patients can cancel up to 2 hours before an appointment; doctors and admins any time before it is completed. Paid bookings are refunded in full automatically. Appointment times are India time (IST).
 - The database allows only one active booking per doctor per time slot.

@@ -1,57 +1,23 @@
-import { NextResponse } from "next/server";
-import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
-import { getSession, unauthorized } from "@/lib/session";
-import { parseScheduleEntry, type ScheduleEntry } from "@/lib/doctorSchedule";
+import { requestChange } from "@/lib/requestRoute";
 
-type IncomingSchedule = Partial<ScheduleEntry> & {
-  doctor_id: string;
-  dayOfWeek?: number;
-  startTime?: string;
-  endTime?: string;
-};
-
+// A batch of schedule entries is one request for the hospital to approve.
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "doctor") {
-    return unauthorized("Please log in as a doctor.");
-  }
-
-  const body = (await req.json()) as { schedules?: IncomingSchedule[] };
-  const schedules = Array.isArray(body.schedules) ? body.schedules : [];
-
-  if (schedules.length === 0) {
-    return NextResponse.json({ error: "No schedules provided" }, { status: 400 });
-  }
-
-  const rows = schedules.map((s) => ({
-    doctor_id: session.id,
-    day_of_week: Number(s.dayOfWeek),
-    title: s.title ?? "Other",
-    start_time: s.startTime ?? "09:00",
-    end_time: s.endTime ?? "09:20",
-    notes: s.notes ?? "",
-  }));
-
-  const { data, error } = await supabaseAdmin
-    .from("doctor_schedules")
-    .insert(rows)
-    .select("id, doctor_id, day_of_week, title, start_time, end_time, notes");
-
-  if (error || !data) {
-    return NextResponse.json(
-      {
-        error:
-          error?.code === "42501" && !isUsingServiceRole()
-            ? "Schedule creation is blocked by Supabase RLS. Add SUPABASE_SERVICE_ROLE_KEY to server env."
-            : error?.message || "Failed to create schedule entries",
-      },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json(
-    (data as Parameters<typeof parseScheduleEntry>[0][]).map((row) => parseScheduleEntry(row)).filter(Boolean),
-    { status: 200 },
+  return requestChange(
+    "add_schedules",
+    (body) => {
+      const schedules = Array.isArray(body.schedules) ? (body.schedules as Record<string, unknown>[]) : [];
+      if (schedules.length === 0) return "No schedules provided";
+      if (schedules.length > 100) return "Too many entries in one request (max 100)";
+      return {
+        schedules: schedules.map((s) => ({
+          dayOfWeek: Number(s.dayOfWeek),
+          title: s.title ?? "Other",
+          startTime: s.startTime ?? "09:00",
+          endTime: s.endTime ?? "09:20",
+          notes: s.notes ?? "",
+        })),
+      };
+    },
+    req
   );
 }
-

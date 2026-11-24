@@ -5,7 +5,7 @@ export default function CTASection() {
 
   const router = useRouter();
   return (
-    <section className="w-full bg-[#edf4f8] py-40 text-center relative overflow-hidden">
+    <section className="w-full bg-[#edf4f8] py-20 md:py-40 text-center relative overflow-hidden">
 
       {/* SOFT GRADIENT GLOW (background feel) */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(150,200,230,0.25),transparent_70%)] pointer-events-none" />
@@ -18,7 +18,7 @@ export default function CTASection() {
         </div>
 
         {/* HEADING */}
-        <h2 className="text-[56px] font-serif font-extrabold leading-tight text-gray-800">
+        <h2 className="text-4xl md:text-[56px] font-serif font-extrabold leading-tight text-gray-800">
           Start Your Healthcare
           <br />
           <span className="text-[#b9d6ea] font-serif">Journey Today</span>
@@ -31,7 +31,7 @@ export default function CTASection() {
         </p>
 
         {/* BUTTONS */}
-        <div className="mt-10 flex items-center justify-center gap-6">
+        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
 
           {/* PRIMARY */}
           <button

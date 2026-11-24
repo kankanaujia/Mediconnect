@@ -18,6 +18,7 @@ import {
 } from "@/lib/doctorSchedule";
 import { supabase } from "@/lib/supabase";
 import WeekCalendar from "@/components/doctor/WeekCalendar";
+import RequestsList, { type DoctorRequest } from "@/components/panel/RequestsList";
 
 type Slot = {
   id: string;
@@ -87,6 +88,8 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true);
   const [showProfile, setShowProfile] = useState(false);
   const [bookingView, setBookingView] = useState<"list" | "week">("list");
+  const [requests, setRequests] = useState<DoctorRequest[]>([]);
+  const [requestNotice, setRequestNotice] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({
     phone: "",
@@ -103,23 +106,6 @@ export default function DoctorDashboard() {
   });
   const [scheduleForm, setScheduleForm] = useState(emptyScheduleForm);
 
-  useEffect(() => {
-    const storedUser = localStorage.getItem("doctor");
-
-    if (!storedUser) {
-      router.push("/Doctor_login");
-      return;
-    }
-
-    const parsed = JSON.parse(storedUser) as DoctorUser;
-    // Restoring the saved login from localStorage on mount is a one-off sync
-    // from an external store, which is what this effect is for.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUser(parsed);
-    void loadHospitalName(parsed);
-    void loadDoctorData(parsed.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once, after the saved login is read
-  }, [router]);
 
   async function loadHospitalName(doctor: DoctorUser) {
     if (!doctor.hospital_id) return;
@@ -155,7 +141,9 @@ export default function DoctorDashboard() {
       ]);
 
       if (bookingsRes.status === 401) {
-        handleLogout();
+        // Saved login has expired: clear it and go back to the login page.
+        localStorage.removeItem("doctor");
+        router.push("/Doctor_login");
         return;
       }
 
@@ -165,6 +153,7 @@ export default function DoctorDashboard() {
         schedulesRes.json(),
       ]);
 
+      void loadRequests();
       setSlots(Array.isArray(slotsData) ? slotsData : []);
       setBookings(Array.isArray(bookingsData) ? bookingsData : []);
       setSchedules(
@@ -222,6 +211,51 @@ export default function DoctorDashboard() {
     if (Number.isNaN(day)) return schedules;
     return schedules.filter((entry) => Number(entry.dayOfWeek) === day);
   }, [schedules, scheduleDayFilter]);
+
+  // Slot and schedule changes are requests the hospital approves.
+  async function loadRequests() {
+    const res = await fetch("/api/doctor-requests");
+    if (!res.ok) return;
+    const data = await res.json();
+    setRequests(Array.isArray(data) ? data : []);
+  }
+
+  const onRequestSent = (data: { message?: string }) => {
+    setRequestNotice(
+      data.message ?? "Sent to your hospital for approval. It will apply once approved.",
+    );
+    void loadRequests();
+  };
+
+  const withdrawRequest = async (id: string) => {
+    const res = await fetch(`/api/doctor-requests/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) alert(data.error || "Could not withdraw the request");
+    await loadRequests();
+  };
+
+  const slotLabel = (id: string) => {
+    const slot = slots.find((item) => item.id === id);
+    return slot ? `${slot.date.replace("T", " ").slice(0, 16)}${slot.location ? `, ${slot.location}` : ""}` : "";
+  };
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("doctor");
+
+    if (!storedUser) {
+      router.push("/Doctor_login");
+      return;
+    }
+
+    const parsed = JSON.parse(storedUser) as DoctorUser;
+    // Restoring the saved login from localStorage on mount is a one-off sync
+    // from an external store, which is what this effect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setUser(parsed);
+    void loadHospitalName(parsed);
+    void loadDoctorData(parsed.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once, after the saved login is read
+  }, [router]);
 
   const openProfile = async () => {
     setShowProfile(true);
@@ -286,6 +320,12 @@ export default function DoctorDashboard() {
       return;
     }
 
+    if (res.status === 202) {
+      onRequestSent(data);
+      setSlotForm({ date: "", duration: "20", location: "" });
+      return;
+    }
+
     setSlots((prev) => [...prev, data]);
     setSlotForm({ date: "", duration: "20", location: "" });
   };
@@ -296,10 +336,17 @@ export default function DoctorDashboard() {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ id, label: slotLabel(id) }),
     });
 
     if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "Could not send the request");
+      return;
+    }
+
+    if (res.status === 202) {
+      onRequestSent(await res.json());
       return;
     }
 
@@ -321,6 +368,12 @@ export default function DoctorDashboard() {
 
     if (!res.ok) {
       alert(data.error || "Failed to update slot");
+      return;
+    }
+
+    if (res.status === 202) {
+      onRequestSent(data);
+      setEditingSlot(null);
       return;
     }
 
@@ -366,6 +419,13 @@ export default function DoctorDashboard() {
       return;
     }
 
+    if (res.status === 202) {
+      onRequestSent(data);
+      setEditingScheduleId(null);
+      setScheduleForm(emptyScheduleForm);
+      return;
+    }
+
     setSchedules((prev) => {
       const next = editingScheduleId
         ? prev.map((entry) => (entry.id === data.id ? data : entry))
@@ -390,15 +450,26 @@ export default function DoctorDashboard() {
   };
 
   const handleDeleteSchedule = async (id: string) => {
+    const entry = schedules.find((item) => item.id === id);
+    const label = entry
+      ? `${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][Number(entry.dayOfWeek)]} ${entry.startTime}-${entry.endTime} ${entry.title}`
+      : "";
     const res = await fetch("/api/schedules", {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify({ id, label }),
     });
 
     if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || "Could not send the request");
+      return;
+    }
+
+    if (res.status === 202) {
+      onRequestSent(await res.json());
       return;
     }
 
@@ -520,6 +591,11 @@ export default function DoctorDashboard() {
       return;
     }
 
+    if (res.status === 202) {
+      onRequestSent(await res.json());
+      return;
+    }
+
     await loadDoctorData(user.id);
   };
 
@@ -559,7 +635,7 @@ export default function DoctorDashboard() {
             if (slotTime > new Date()) {
               newSlots.push({
                 doctor_id: user.id,
-                date: slotTime.toISOString(),
+                date: `${slotTime.getFullYear()}-${String(slotTime.getMonth() + 1).padStart(2, "0")}-${String(slotTime.getDate()).padStart(2, "0")}T${String(slotTime.getHours()).padStart(2, "0")}:${String(slotTime.getMinutes()).padStart(2, "0")}:00`,
                 duration: 60,
                 location: "Clinic",
               });
@@ -571,8 +647,8 @@ export default function DoctorDashboard() {
       }
 
       // ✅ remove duplicates
-      const existing = new Set(slots.map((s) => s.date));
-      const filtered = newSlots.filter((s) => !existing.has(s.date));
+      const existing = new Set(slots.map((s) => s.date.slice(0, 16)));
+      const filtered = newSlots.filter((s) => !existing.has(s.date.slice(0, 16)));
 
       if (filtered.length === 0) {
         alert("No new slots generated (already exists)");
@@ -593,6 +669,11 @@ export default function DoctorDashboard() {
         return;
       }
 
+      if (res.status === 202) {
+        onRequestSent(await res.json());
+        return;
+      }
+
       alert(`${filtered.length} slots generated successfully`);
 
       await loadDoctorData(user.id);
@@ -605,8 +686,8 @@ export default function DoctorDashboard() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 px-6 py-24 lg:px-24">
-      <div className="mb-8 flex items-start justify-between">
+    <div className="min-h-screen bg-gray-50 px-4 py-24 sm:px-6 lg:px-24">
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-4xl font-bold text-gray-800">Doctor Dashboard</h1>
           <p className="mt-2 text-xl font-medium text-gray-700">
@@ -623,7 +704,7 @@ export default function DoctorDashboard() {
           )}
         </div>
 
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={() => void openProfile()}
             className="rounded-lg border border-gray-300 bg-white px-5 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
@@ -730,8 +811,30 @@ export default function DoctorDashboard() {
         ))}
       </div>
 
+      {requestNotice ? (
+        <div className="mb-6 flex items-start justify-between gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <span>{requestNotice}</span>
+          <button onClick={() => setRequestNotice("")} className="text-emerald-700" aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      ) : null}
+
+      <section className="mb-8 rounded-2xl bg-white p-5 shadow-sm sm:p-6">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-xl font-semibold text-gray-900 sm:text-2xl">My Requests</h2>
+          <span className="text-sm text-gray-500">
+            {requests.filter((r) => r.status === "pending").length} waiting for the hospital
+          </span>
+        </div>
+        <p className="mb-4 text-sm text-gray-500">
+          Your hospital approves changes to your slots and weekly schedule. A change shows up below once it is approved.
+        </p>
+        <RequestsList requests={requests.slice(0, 8)} mode="doctor" onWithdraw={withdrawRequest} />
+      </section>
+
       <div className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="space-y-8">
+        <div className="min-w-0 space-y-8">
           <section className="rounded-2xl bg-blue-50 p-6 text-gray-800 shadow-sm">
             <h2 className="mb-4 text-2xl font-semibold">Daily Slots</h2>
 

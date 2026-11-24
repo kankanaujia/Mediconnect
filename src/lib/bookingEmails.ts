@@ -138,7 +138,7 @@ export async function sendBookingRescheduledEmail(
 /** Sent to the patient and the doctor when a booking is cancelled. */
 export async function sendBookingCancelledEmails(
   booking: BookingRow,
-  options: { cancelledBy: "patient" | "doctor" | "admin"; refunded: boolean },
+  options: { cancelledBy: "patient" | "doctor" | "admin" | "hospital"; refunded: boolean },
   baseUrl: string
 ) {
   const { patient, doctor, hospital } = await loadParties(booking);
@@ -148,7 +148,9 @@ export async function sendBookingCancelledEmails(
       ? "the patient"
       : options.cancelledBy === "doctor"
         ? "the doctor"
-        : "the MediConnect team";
+        : options.cancelledBy === "hospital"
+          ? "the hospital"
+          : "the MediConnect team";
 
   const jobs: Promise<unknown>[] = [];
 

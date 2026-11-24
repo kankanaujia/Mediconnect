@@ -1,48 +1,21 @@
-import { NextResponse } from "next/server";
-import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
-import { getSession, unauthorized } from "@/lib/session";
+import { requestChange } from "@/lib/requestRoute";
 
-type IncomingSlot = {
-  doctor_id: string;
-  date: string;
-  duration: number;
-  location: string;
-};
-
+// A batch of slots is one request for the hospital to approve.
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "doctor") {
-    return unauthorized("Please log in as a doctor.");
-  }
-
-  const body = (await req.json()) as { slots?: IncomingSlot[] };
-  const slots = Array.isArray(body.slots) ? body.slots : [];
-
-  if (slots.length === 0) {
-    return NextResponse.json({ error: "No slots provided" }, { status: 400 });
-  }
-
-  const rows = slots.map((slot) => ({
-    doctor_id: session.id,
-    date: slot.date,
-    duration: slot.duration,
-    location: slot.location,
-  }));
-
-  const { data, error } = await supabaseAdmin.from("slots").insert(rows).select("*");
-
-  if (error || !data) {
-    return NextResponse.json(
-      {
-        error:
-          error?.code === "42501" && !isUsingServiceRole()
-            ? "Slot creation is blocked by Supabase RLS. Add SUPABASE_SERVICE_ROLE_KEY to server env."
-            : error?.message || "Failed to create slots",
-      },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json(data, { status: 200 });
+  return requestChange(
+    "add_slots",
+    (body) => {
+      const slots = Array.isArray(body.slots) ? (body.slots as Record<string, unknown>[]) : [];
+      if (slots.length === 0) return "No slots provided";
+      if (slots.length > 200) return "Too many slots in one request (max 200)";
+      return {
+        slots: slots.map((s) => ({
+          date: s.date,
+          duration: Number(s.duration) || 20,
+          location: s.location ?? "",
+        })),
+      };
+    },
+    req
+  );
 }
-

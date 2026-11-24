@@ -9,6 +9,7 @@ const loginPages = {
   patient: "/Patient_login",
   doctor: "/Doctor_login",
   admin: "/admin/login",
+  hospital: "/hospital/login",
 } as const;
 
 type Role = keyof typeof loginPages;
@@ -17,7 +18,7 @@ function ForgotPasswordForm() {
   const params = useSearchParams();
   const initialRole = params.get("role");
   const [role, setRole] = useState<Role>(
-    initialRole === "doctor" || initialRole === "admin" ? initialRole : "patient"
+    initialRole === "doctor" || initialRole === "admin" || initialRole === "hospital" ? initialRole : "patient"
   );
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -63,6 +64,7 @@ function ForgotPasswordForm() {
             >
               <option value="patient">Patient</option>
               <option value="doctor">Doctor</option>
+              <option value="hospital">Hospital staff</option>
               {role === "admin" ? <option value="admin">Admin</option> : null}
             </select>
           </div>

@@ -44,10 +44,10 @@ export default function QuoteSection() {
 
       {/* Quote Box */}
       <div
-        className={`relative max-w-3xl mx-auto bg-white/90 backdrop-blur-md rounded-3xl p-12 text-center shadow-xl transition-all duration-700
+        className={`relative max-w-3xl mx-4 md:mx-auto bg-white/90 backdrop-blur-md rounded-3xl p-6 md:p-12 text-center shadow-xl transition-all duration-700
         ${visible ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-10 scale-95"}`}
       >
-        <p className="text-2xl md:text-3xl font-serif font-semibold text-gray-800 leading-relaxed">
+        <p className="text-xl md:text-3xl font-serif font-semibold text-gray-800 leading-relaxed">
           &ldquo;Medicine is not only a science; it is also an art. It does not consist
           of compounding pills and plasters; it deals with the very processes of
           life.&rdquo;

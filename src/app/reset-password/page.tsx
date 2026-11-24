@@ -11,6 +11,7 @@ const loginPages: Record<string, string> = {
   patient: "/Patient_login",
   doctor: "/Doctor_login",
   admin: "/admin/login",
+  hospital: "/hospital/login",
 };
 
 function ResetPasswordForm() {

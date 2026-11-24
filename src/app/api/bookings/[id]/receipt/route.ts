@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logPatientAccess } from "@/lib/accessLog";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { bookingFromRow } from "@/lib/bookingMeta";
 import { generateReceiptPdf } from "@/lib/receiptPdf";
@@ -40,6 +41,7 @@ export async function GET(
   ]);
 
   const parsed = bookingFromRow(booking);
+  await logPatientAccess(session, [{ patientId: booking.patient_id, bookingId: booking.id }], "Downloaded receipt");
   const pdf = generateReceiptPdf({
     receiptId: parsed.meta.receiptId ?? `receipt-${id}`,
     patientName: patientResult.data?.name ?? "Patient",

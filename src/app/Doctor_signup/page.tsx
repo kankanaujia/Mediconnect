@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
-import { supabase } from "@/lib/supabase";
 import AuthCard, { inputClass, labelClass, primaryButtonClass } from "@/components/auth/AuthCard";
 
 const SPECIALIZATIONS = [
@@ -44,11 +43,9 @@ export default function DoctorSignupPage() {
 
   useEffect(() => {
     let cancelled = false;
-    void supabase
-      .from("hospitals")
-      .select("id, name, location")
-      .order("name")
-      .then(({ data }) => {
+    void fetch("/api/hospitals")
+      .then((res) => res.json())
+      .then((data) => {
         if (!cancelled) setHospitals((data as Hospital[]) ?? []);
       });
     return () => {

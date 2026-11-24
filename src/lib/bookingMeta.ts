@@ -13,7 +13,7 @@ export type BookingMeta = {
   currency?: string;
   receiptId?: string;
   cancelledAt?: string;
-  cancelledBy?: "patient" | "doctor" | "admin";
+  cancelledBy?: "patient" | "doctor" | "admin" | "hospital";
   refundId?: string;
   refundStatus?: string;
   notifications?: {
@@ -110,7 +110,8 @@ export function parseBookingReason(value: string | null | undefined): ParsedBook
         cancelledBy:
           parsed.cancelledBy === "patient" ||
           parsed.cancelledBy === "doctor" ||
-          parsed.cancelledBy === "admin"
+          parsed.cancelledBy === "admin" ||
+          parsed.cancelledBy === "hospital"
             ? parsed.cancelledBy
             : undefined,
         refundId: optionalString(parsed.refundId),
@@ -183,7 +184,7 @@ export function bookingFromRow(row: RowLike): ParsedBookingReason {
       receiptId: text(row.receipt_id),
       cancelledAt: text(row.cancelled_at),
       cancelledBy:
-        row.cancelled_by === "patient" || row.cancelled_by === "doctor" || row.cancelled_by === "admin"
+        row.cancelled_by === "patient" || row.cancelled_by === "doctor" || row.cancelled_by === "admin" || row.cancelled_by === "hospital"
           ? row.cancelled_by
           : undefined,
       refundId: text(row.refund_id),
