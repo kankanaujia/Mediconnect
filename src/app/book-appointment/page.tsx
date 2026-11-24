@@ -34,15 +34,23 @@ type Booking = {
 };
 
 async function fetchSpecialAvailability(doctorId: string, date: string) {
-  const [scheduleRes, bookingsRes] = await Promise.all([
+  const [scheduleRes, bookingsRes, leaveRes] = await Promise.all([
     fetch(`/api/schedules?doctor_id=${doctorId}`),
     fetch(`/api/bookings?doctor_id=${doctorId}`),
+    fetch(`/api/doctors/${doctorId}/leaves`),
   ]);
 
-  const [scheduleData, bookingsData] = await Promise.all([
+  const [scheduleData, bookingsData, leaveData] = await Promise.all([
     scheduleRes.json(),
     bookingsRes.json(),
+    leaveRes.json().catch(() => []),
   ]);
+
+  const onLeave =
+    Array.isArray(leaveData) &&
+    (leaveData as { start_date: string; end_date: string }[]).some(
+      (leave) => date >= leave.start_date && date <= leave.end_date,
+    );
 
   const schedules = Array.isArray(scheduleData) ? (scheduleData as ScheduleEntry[]) : [];
   const activeBookings = Array.isArray(bookingsData)
@@ -55,11 +63,13 @@ async function fetchSpecialAvailability(doctorId: string, date: string) {
 
   // Today: only times that have not passed yet (India time).
   const nowIst = new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString();
-  const times = generateSpecialAppointmentTimes(schedules, date, blockedTimes).filter(
-    (time) => date > nowIst.slice(0, 10) || time > nowIst.slice(11, 16),
-  );
+  const times = onLeave
+    ? []
+    : generateSpecialAppointmentTimes(schedules, date, blockedTimes).filter(
+        (time) => date > nowIst.slice(0, 10) || time > nowIst.slice(11, 16),
+      );
 
-  return { schedules, times };
+  return { schedules, times, onLeave };
 }
 
 export default function BookAppointment() {
@@ -78,6 +88,7 @@ export default function BookAppointment() {
   const [selectedSpecialization, setSelectedSpecialization] = useState("");
   const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
+  const [doctorOnLeave, setDoctorOnLeave] = useState(false);
   const [selectedTime, setSelectedTime] = useState("");
   const [reason, setReason] = useState("");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
@@ -159,10 +170,11 @@ export default function BookAppointment() {
     let cancelled = false;
 
     fetchSpecialAvailability(selectedDoctorId, selectedDate)
-      .catch(() => ({ schedules: [] as ScheduleEntry[], times: [] as string[] }))
-      .then(({ times }) => {
+      .catch(() => ({ schedules: [] as ScheduleEntry[], times: [] as string[], onLeave: false }))
+      .then(({ times, onLeave }) => {
         if (cancelled) return;
         setAvailableTimes(times);
+        setDoctorOnLeave(onLeave);
         setLoadedAvailabilityKey(availabilityKey);
       });
 
@@ -329,6 +341,10 @@ export default function BookAppointment() {
               {loadingTimes ? (
                 <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
                   Checking availability...
+                </p>
+              ) : availableTimes.length === 0 && doctorOnLeave ? (
+                <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-700">
+                  The doctor is on leave on this date. Please pick another day.
                 </p>
               ) : availableTimes.length === 0 ? (
                 <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">

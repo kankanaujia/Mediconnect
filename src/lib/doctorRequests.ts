@@ -14,7 +14,8 @@ export type RequestType =
   | "add_schedule"
   | "update_schedule"
   | "delete_schedule"
-  | "add_schedules";
+  | "add_schedules"
+  | "leave";
 
 type SlotInput = { date?: string; duration?: number | string; location?: string };
 type ScheduleInput = {
@@ -69,6 +70,16 @@ export function describeRequest(type: RequestType, payload: Record<string, unkno
       return `Remove schedule entry${payload.label ? `: ${String(payload.label)}` : ""}`;
     case "add_schedules":
       return `Add ${(payload.schedules as unknown[] | undefined)?.length ?? 0} weekly schedule entries`;
+    case "leave": {
+      const range =
+        payload.startDate === payload.endDate
+          ? `on ${String(payload.startDate)}`
+          : `from ${String(payload.startDate)} to ${String(payload.endDate)}`;
+      const affected = Number(payload.affectedBookings) || 0;
+      return `Leave ${range}${payload.reason ? ` (${String(payload.reason)})` : ""}${
+        affected ? `. ${affected} booked appointment${affected === 1 ? " needs" : "s need"} rescheduling in this period` : ""
+      }`;
+    }
   }
 }
 
@@ -215,6 +226,16 @@ async function applyRequest(request: DoctorRequestRow) {
         .select("id");
       if (error) throw new Error(error.message);
       if (!data?.length) throw new Error("The schedule entry no longer exists");
+      return;
+    }
+    case "leave": {
+      const { error } = await supabaseAdmin.from("doctor_leaves").insert({
+        doctor_id: doctorId,
+        start_date: String(p.startDate),
+        end_date: String(p.endDate),
+        reason: p.reason ? String(p.reason) : null,
+      });
+      if (error) throw new Error(error.message);
       return;
     }
     case "delete_schedule": {

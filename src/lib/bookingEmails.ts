@@ -93,6 +93,7 @@ export async function sendBookingConfirmedEmail(booking: BookingRow, baseUrl: st
       `When: ${whenText(booking)}`,
       hospital ? `Where: ${placeText(hospital)}` : "",
       meta.amount ? `Paid: ${formatAmount(meta.amount, meta.currency)}` : "",
+      "Prefer to consult online? A \"Join video call\" button appears on your dashboard 15 minutes before the appointment.",
       "You can download your receipt or cancel up to 2 hours before the appointment from your dashboard.",
     ].filter(Boolean),
     { label: "Open my dashboard", url: `${baseUrl}/patient-dashboard` }

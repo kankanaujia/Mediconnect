@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { requestChange } from "@/lib/requestRoute";
+import { upcomingLeaves } from "@/lib/doctorLeave";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -18,7 +19,19 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? [], { status: 200 });
+  // Hide free slots on days the doctor is on approved leave.
+  let slots = data ?? [];
+  if (doctor_id && slots.length) {
+    const leaves = await upcomingLeaves(doctor_id);
+    if (leaves.length) {
+      slots = slots.filter((slot) => {
+        const day = String(slot.date).slice(0, 10);
+        return slot.is_booked || !leaves.some((l) => day >= l.start_date && day <= l.end_date);
+      });
+    }
+  }
+
+  return NextResponse.json(slots, { status: 200 });
 }
 
 // Doctors' changes are requests that their hospital approves (see lib/doctorRequests.ts).
