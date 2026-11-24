@@ -8,7 +8,6 @@ export default function OfflinePage() {
         MediConnect needs the internet to show doctors and your appointments. Check your connection and try
         again.
       </p>
-      <p className="mt-2 text-gray-500">आप ऑफ़लाइन हैं। इंटरनेट चालू करके फिर से कोशिश करें।</p>
     </div>
   );
 }

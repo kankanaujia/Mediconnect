@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { useLang } from "@/lib/i18n";
 
 type Role = "patient" | "doctor" | "admin" | "hospital";
 type Me = { loggedIn: false } | { loggedIn: true; role: Role; name: string };
@@ -31,18 +30,6 @@ export default function Navbar() {
   const [menuPath, setMenuPath] = useState<string | null>(null);
   // The mobile menu closes by itself when the page changes.
   const menuOpen = menuPath === pathname;
-  const { lang, setLang, t } = useLang();
-
-  const langToggle = (
-    <button
-      type="button"
-      onClick={() => setLang(lang === "hi" ? "en" : "hi")}
-      className="rounded-full border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-      aria-label={lang === "hi" ? "Switch to English" : "Hindi"}
-    >
-      {lang === "hi" ? "English" : "हिंदी"}
-    </button>
-  );
 
   // Re-check on every page change so logging in or out updates the navbar.
   useEffect(() => {
@@ -70,22 +57,22 @@ export default function Navbar() {
   const authLinks = me?.loggedIn ? (
     <>
       <Link href={dashboards[me.role]} className={pill} title={me.name}>
-        {t(me.role === "admin" ? "Admin Panel" : me.role === "hospital" ? "Hospital Panel" : "My Dashboard")}
+        {me.role === "admin" ? "Admin Panel" : me.role === "hospital" ? "Hospital Panel" : "My Dashboard"}
       </Link>
       <button
         onClick={() => void logout()}
         className="px-5 py-2 rounded-full font-serif text-red-600 hover:bg-red-50 transition"
       >
-        {t("Logout")}
+        Logout
       </button>
     </>
   ) : (
     <>
       <Link href="/Patient_login" className={pill}>
-        {t("Patient Login")}
+        Patient Login
       </Link>
       <Link href="/Doctor_login" className={pill}>
-        {t("Doctor Login")}
+        Doctor Login
       </Link>
     </>
   );
@@ -111,20 +98,15 @@ export default function Navbar() {
                     : "text-gray-600 hover:text-gray-900"
                 }`}
               >
-                {t(link.name)}
+                {link.name}
               </Link>
             ))}
           </div>
           <span className="text-gray-300">|</span>
-          <div className="flex items-center gap-3">
-            {langToggle}
-            {authLinks}
-          </div>
+          <div className="flex items-center gap-3">{authLinks}</div>
         </div>
 
         {/* Phone */}
-        <div className="flex items-center gap-2 md:hidden">
-        {langToggle}
         <button
           type="button"
           onClick={() => setMenuPath(menuOpen ? null : pathname)}
@@ -134,7 +116,6 @@ export default function Navbar() {
         >
           {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
-        </div>
       </div>
 
       {menuOpen ? (
@@ -148,7 +129,7 @@ export default function Navbar() {
                   pathname === link.href ? "bg-gray-100 text-gray-900" : "text-gray-600"
                 }`}
               >
-                {t(link.name)}
+                {link.name}
               </Link>
             ))}
           </div>
