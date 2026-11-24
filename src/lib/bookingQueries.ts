@@ -65,6 +65,16 @@ export async function enrichBookings(rows: BookingRow[]) {
     }
   }
 
+  // Prescriptions are optional too (table added in migration 007).
+  const prescribed = new Set<string>();
+  if (rows.length) {
+    const { data: rxRows } = await supabaseAdmin
+      .from("prescriptions")
+      .select("booking_id")
+      .in("booking_id", rows.map((row) => row.id));
+    for (const rx of rxRows ?? []) prescribed.add(rx.booking_id);
+  }
+
   return rows.map((row) => {
     const parsed = bookingFromRow(row);
     const doctor = doctorMap.get(row.doctor_id);
@@ -85,6 +95,7 @@ export async function enrichBookings(rows: BookingRow[]) {
       hospital_name: hospital?.name ?? "",
       hospital_location: hospital?.location ?? "",
       review: reviewMap.get(row.id) ?? null,
+      has_prescription: prescribed.has(row.id),
     };
   });
 }

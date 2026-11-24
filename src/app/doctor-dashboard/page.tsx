@@ -9,6 +9,9 @@ import {
   type ChangeEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import VideoCallButton from "@/components/VideoCallButton";
+import PrescriptionEditor from "@/components/PrescriptionEditor";
+import LeavePanel from "@/components/doctor/LeavePanel";
 import { PencilLine, Trash2 } from "lucide-react";
 import {
   dayOptions,
@@ -44,6 +47,7 @@ type Booking = {
     paymentStatus?: "pending" | "paid" | "failed" | "refunded";
   };
   patient_name: string;
+  has_prescription?: boolean;
 };
 
 type DoctorUser = {
@@ -1038,7 +1042,14 @@ export default function DoctorDashboard() {
                         </span>
 
                         {booking.meta.status === "booked" ? (
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2 md:justify-end">
+                            {booking.meta.paymentStatus === "paid" ? (
+                              <VideoCallButton
+                                bookingId={booking.id}
+                                date={booking.appointment_date}
+                                time={booking.appointment_time}
+                              />
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => void handleMarkCompleted(booking.id)}
@@ -1055,6 +1066,14 @@ export default function DoctorDashboard() {
                             </button>
                           </div>
                         ) : null}
+                        {booking.meta.status !== "cancelled" && user ? (
+                          <PrescriptionEditor
+                            bookingId={booking.id}
+                            patientName={booking.patient_name}
+                            hasPrescription={Boolean(booking.has_prescription)}
+                            onSaved={() => void loadDoctorData(user.id)}
+                          />
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -1063,6 +1082,8 @@ export default function DoctorDashboard() {
             </div>
           </section>
         </div>
+
+        <LeavePanel />
 
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-2xl font-semibold text-gray-900">

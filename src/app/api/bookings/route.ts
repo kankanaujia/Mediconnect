@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isOnLeave } from "@/lib/doctorLeave";
 import { logPatientAccess } from "@/lib/accessLog";
 import { supabaseAdmin, isUsingServiceRole } from "@/lib/supabaseAdmin";
 import {
@@ -132,6 +133,13 @@ export async function POST(req: Request) {
 
   if (!doctorRow) {
     return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
+  }
+
+  if (await isOnLeave(doctorRow.id, body.appointment_date)) {
+    return NextResponse.json(
+      { error: "The doctor is on leave that day. Please choose another date." },
+      { status: 409 }
+    );
   }
 
   const bookingData = bookingColumns(body.reason ?? "", {
@@ -307,6 +315,13 @@ export async function PUT(req: Request) {
     return NextResponse.json(
       { error: "Please choose a date and time in the future." },
       { status: 400 }
+    );
+  }
+
+  if (appointment_date && (await isOnLeave(current.doctor_id, nextDate))) {
+    return NextResponse.json(
+      { error: "The doctor is on leave that day. Please choose another date." },
+      { status: 409 }
     );
   }
 

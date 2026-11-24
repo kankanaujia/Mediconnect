@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
+import VideoCallButton from "@/components/VideoCallButton";
 import { UserRound, X } from "lucide-react";
 import { StarInput, Stars } from "@/components/StarRating";
 import PrivacyPanel from "@/components/patient/PrivacyPanel";
@@ -65,6 +66,7 @@ type Booking = {
   specialization: string;
   hospital_name: string;
   review?: { rating: number; comment: string | null } | null;
+  has_prescription?: boolean;
   meta: {
     kind: "daily" | "special";
     status: "booked" | "completed" | "cancelled";
@@ -847,6 +849,14 @@ export default function PatientDashboard() {
                           </>
                           ) : null}
 
+                          {booking.meta.status === "booked" && booking.meta.paymentStatus === "paid" ? (
+                            <VideoCallButton
+                              bookingId={booking.id}
+                              date={booking.appointment_date}
+                              time={booking.appointment_time}
+                            />
+                          ) : null}
+
                           {booking.meta.paymentStatus === "paid" ||
                           booking.meta.paymentStatus === "refunded" ? (
                             <a
@@ -854,6 +864,14 @@ export default function PatientDashboard() {
                               className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-medium text-gray-700"
                             >
                               Download Receipt
+                            </a>
+                          ) : null}
+                          {booking.has_prescription ? (
+                            <a
+                              href={`/api/bookings/${booking.id}/prescription?format=pdf`}
+                              className="rounded-lg border border-indigo-300 px-4 py-2 text-xs font-medium text-indigo-700"
+                            >
+                              Download Prescription
                             </a>
                           ) : null}
                           {booking.meta.status === "booked" ? (
@@ -949,6 +967,14 @@ export default function PatientDashboard() {
                           className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700"
                         >
                           Receipt
+                        </a>
+                      ) : null}
+                      {booking.has_prescription ? (
+                        <a
+                          href={`/api/bookings/${booking.id}/prescription?format=pdf`}
+                          className="rounded-lg border border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-700"
+                        >
+                          Prescription
                         </a>
                       ) : null}
                       {booking.meta.status === "completed" ? (
