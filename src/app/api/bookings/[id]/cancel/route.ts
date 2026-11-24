@@ -8,6 +8,7 @@ import {
 } from "@/lib/bookingMeta";
 import { refundPayment } from "@/lib/razorpayServer";
 import { sendBookingCancelledEmails } from "@/lib/bookingEmails";
+import { sendCancellationSms } from "@/lib/bookingNotifications";
 import { appBaseUrl } from "@/lib/email";
 import { canAccessBooking, forbidden, getSession, unauthorized } from "@/lib/session";
 
@@ -111,11 +112,16 @@ export async function POST(
     await supabaseAdmin.from("slots").update({ is_booked: false }).eq("id", parsed.meta.slotId);
   }
 
-  await sendBookingCancelledEmails(
-    updated,
-    { cancelledBy: session.role, refunded: Boolean(refund) },
-    appBaseUrl(req)
-  );
+  await Promise.all([
+    sendBookingCancelledEmails(
+      updated,
+      { cancelledBy: session.role, refunded: Boolean(refund) },
+      appBaseUrl(req)
+    ).catch(() => null),
+    sendCancellationSms(updated, { cancelledBy: session.role, refunded: Boolean(refund) }).catch(
+      () => null
+    ),
+  ]);
 
   return NextResponse.json(
     {

@@ -7,6 +7,9 @@ import {
 } from "@/lib/bookingMeta";
 import { getBookingAmount, bookingCurrency } from "@/lib/paymentConfig";
 import { enrichBookings, sameClockTime, type BookingRow } from "@/lib/bookingQueries";
+import { sendPaymentPendingSms } from "@/lib/bookingNotifications";
+import { sendBookingReservedEmail } from "@/lib/bookingEmails";
+import { appBaseUrl } from "@/lib/email";
 import {
   canAccessBooking,
   forbidden,
@@ -203,6 +206,12 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+
+  // Payment is still pending: tell the patient by SMS and email. Failures never block the booking.
+  await Promise.all([
+    sendPaymentPendingSms(data).catch(() => null),
+    sendBookingReservedEmail(data, appBaseUrl(req)).catch(() => null),
+  ]);
 
   const [booking] = await enrichBookings([data as BookingRow]);
   return NextResponse.json(booking, { status: 200 });

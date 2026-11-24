@@ -48,6 +48,35 @@ function placeText(hospital: { name: string; location: string | null } | null) {
   return hospital.location ? `${hospital.name}, ${hospital.location}` : hospital.name;
 }
 
+/** Sent to the patient when a booking is created and payment is still pending. */
+export async function sendBookingReservedEmail(booking: BookingRow, baseUrl: string) {
+  const { patient, doctor, hospital } = await loadParties(booking);
+  if (!patient?.email) return;
+
+  const meta = bookingFromRow(booking).meta;
+  const { html, text } = emailLayout(
+    "Your appointment is reserved - payment pending",
+    [
+      `Hi ${patient.name || "there"},`,
+      `Your appointment with ${doctor?.name ?? "your doctor"}${
+        doctor?.specialization ? ` (${doctor.specialization})` : ""
+      } is reserved.`,
+      `When: ${whenText(booking)}`,
+      hospital ? `Where: ${placeText(hospital)}` : "",
+      meta.amount ? `Amount due: ${formatAmount(meta.amount, meta.currency)}` : "",
+      "Please complete the payment from your dashboard to confirm the appointment.",
+    ].filter(Boolean),
+    { label: "Pay now", url: `${baseUrl}/patient-dashboard` }
+  );
+
+  await sendEmail({
+    to: patient.email,
+    subject: `Payment pending: appointment on ${whenText(booking)}`,
+    html,
+    text,
+  });
+}
+
 /** Sent to the patient once payment is verified. */
 export async function sendBookingConfirmedEmail(booking: BookingRow, baseUrl: string) {
   const { patient, doctor, hospital } = await loadParties(booking);
