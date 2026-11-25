@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { RatingSummary } from "@/components/StarRating";
-import { useLang } from "@/lib/i18n";
 
 type Doctor = {
   id: string;
@@ -32,7 +31,6 @@ export default function DoctorsPage() {
   const [specialization, setSpecialization] = useState("");
   const [sort, setSort] = useState("name");
   const [city, setCity] = useState("");
-  const { t } = useLang();
 
   useEffect(() => {
     let cancelled = false;
@@ -90,10 +88,10 @@ export default function DoctorsPage() {
     <div className="bg-white">
       <section className="w-full bg-gradient-to-r from-[#dfe8ee] via-[#d6e3ea] to-[#cfdde6] px-5 pb-16 pt-28 md:py-36 md:pt-48 text-center">
         <h1 className="text-4xl md:text-[64px] font-serif font-extrabold text-gray-800">
-          {t("Find Your Medical")} <span className="text-[#80c8f6]">{t("Specialist")}</span>
+          Find Your Medical <span className="text-[#80c8f6]">Specialist</span>
         </h1>
         <p className="mt-6 text-gray-500 font-serif text-base md:text-lg max-w-3xl mx-auto leading-relaxed">
-          {t("Browse our extensive network of healthcare professionals across various specialties.")}
+          Browse our extensive network of healthcare professionals across various specialties.
         </p>
       </section>
 
@@ -104,7 +102,7 @@ export default function DoctorsPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("Search by doctor, specialty or hospital")}
+              placeholder="Search by doctor, specialty or hospital"
               className="w-full min-w-0 outline-none"
             />
           </label>
@@ -113,7 +111,7 @@ export default function DoctorsPage() {
             onChange={(e) => setSpecialization(e.target.value)}
             className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
           >
-            <option value="">{t("All specialties")}</option>
+            <option value="">All specialties</option>
             {specializations.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -129,7 +127,7 @@ export default function DoctorsPage() {
             className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
             aria-label="City"
           >
-            <option value="">{t("All cities")}</option>
+            <option value="">All cities</option>
             {cities.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -141,7 +139,7 @@ export default function DoctorsPage() {
             onChange={(e) => setHospital(e.target.value)}
             className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
           >
-            <option value="">{t("All hospitals")}</option>
+            <option value="">All hospitals</option>
             {hospitals
               .filter((h) => !city || (h.location ?? "").trim().toLowerCase() === city.toLowerCase())
               .map((h) => (
@@ -155,15 +153,15 @@ export default function DoctorsPage() {
             onChange={(e) => setSort(e.target.value)}
             className="w-full min-w-0 rounded-lg border px-4 py-3 text-gray-600"
           >
-            <option value="name">{t("Sort: Name")}</option>
-            <option value="rating">{t("Sort: Top rated")}</option>
-            <option value="experience">{t("Sort: Most experienced")}</option>
+            <option value="name">Sort: Name</option>
+            <option value="rating">Sort: Top rated</option>
+            <option value="experience">Sort: Most experienced</option>
           </select>
         </div>
 
         <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
           <span>
-            {loaded ? `${visible.length} ${t("doctors found")}` : t("Loading doctors...")}
+            {loaded ? `${visible.length} doctor${visible.length === 1 ? "" : "s"} found` : "Loading doctors..."}
           </span>
           {hasFilters ? (
             <button
@@ -175,7 +173,7 @@ export default function DoctorsPage() {
               }}
               className="text-blue-500 hover:underline"
             >
-              {t("Clear filters")}
+              Clear filters
             </button>
           ) : null}
         </div>
@@ -184,7 +182,7 @@ export default function DoctorsPage() {
       <section className="mx-auto max-w-6xl px-5 md:px-6 pb-16">
         {loaded && visible.length === 0 ? (
           <p className="rounded-xl border p-8 text-center text-gray-500">
-            {t("No doctors match your search. Try a different specialty or hospital.")}
+            No doctors match your search. Try a different specialty or hospital.
           </p>
         ) : null}
 
@@ -218,9 +216,9 @@ export default function DoctorsPage() {
               </div>
               <div className="mt-3 flex items-center justify-between text-sm">
                 <span>
-                  {doc.experience_years !== null ? `${doc.experience_years} ${t("yrs experience")}` : ""}
+                  {doc.experience_years !== null ? `${doc.experience_years} yrs experience` : ""}
                 </span>
-                <span className="font-medium underline">{t("VIEW PROFILE →")}</span>
+                <span className="font-medium underline">VIEW PROFILE →</span>
               </div>
             </Link>
           ))}

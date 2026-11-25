@@ -7,7 +7,6 @@ import { cleanPrescription } from "@/lib/prescriptions";
 import { cleanLeave } from "@/lib/doctorLeave";
 import { describeRequest } from "@/lib/doctorRequests";
 import { generatePrescriptionPdf } from "@/lib/prescriptionPdf";
-import { translate } from "@/lib/i18n";
 
 describe("prescriptions", () => {
   it("needs some content", () => {
@@ -66,13 +65,5 @@ describe("doctor leave", () => {
     expect(
       describeRequest("leave", { startDate: "2026-12-05", endDate: "2026-12-06", affectedBookings: 2 })
     ).toBe("Leave from 2026-12-05 to 2026-12-06. 2 booked appointments need rescheduling in this period");
-  });
-});
-
-describe("hindi", () => {
-  it("falls back to English for unknown text", () => {
-    expect(translate("hi", "Doctors")).not.toBe("Doctors");
-    expect(translate("hi", "Something new")).toBe("Something new");
-    expect(translate("en", "Doctors")).toBe("Doctors");
   });
 });
